@@ -1,0 +1,28 @@
+# Allow only R scripts and related files
+!*.R
+!*.r
+!*.Rmd
+!*.Rproj
+
+# RStudio-specific files
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# macOS-specific files
+.DS_Store
+
+# Ignore all other file types
+*.csv
+*.log
+*.tmp
+*.png
+*.pdf
+*.xlsx
+*.sav
+*.rds
+*.html
+*.xml
+*.json
+*.xlsx
