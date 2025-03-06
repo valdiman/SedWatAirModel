@@ -1,5 +1,5 @@
 ## Script to investigate mass transfer coefficients
-# for PCBs using sediment from Altavista, VI.
+# for PCBs using sediment from Altavista, VI. for shaken experiments.
 
 # Packages and libraries --------------------------------------------------
 # Install packages
@@ -22,15 +22,11 @@ install.packages("gridExtra")
 
 # Read data ---------------------------------------------------------------
 {
-  exp.data.SPME <- read.csv("Data/SPME_data_long.csv")
-  exp.data.PUF <- read.csv("Data/PUF_data_long.csv")
-  # Add sampler
-  exp.data.SPME$sampler <- "SPME"
-  exp.data.PUF$sampler <- "PUF"
-  # Combine
-  exp.data <- rbind(exp.data.PUF, exp.data.SPME)
-  # Select individual congener from datasets
-  pcb.ind <- "PCB_19"
+  obs.data <- read.csv("Data/AVL_S_PCB1.csv")
+  # Physical chemical properties
+  pcp.data <- read.csv("Data/AVL_S_PCP_PCB1.csv")
+  
+  pcb.ind <- "PCB1"
   # Extract relevant columns from each dataset
   pcbi <- exp.data[, c("ID", "Group", "time", "sampler", pcb.ind)]
 }
@@ -96,7 +92,7 @@ rtm.PCB = function(t, state, parms){
   # Experimental conditions
   MH2O <- 18.0152 # g/mol water molecular weight
   MCO2 <- 44.0094 # g/mol CO2 molecular weight
-  MW.pcb <- 257.532 # g/mol PCB 19 molecular weight
+  MW.pcb <- pcp.data$MW # g/mol PCBi molecular weight
   R <- 8.3144 # J/(mol K) molar gas constant
   Tst <- 25 #C air temperature
   Tst.1 <- 273.15 + Tst # air and standard temperature in K, 25 C
@@ -110,13 +106,13 @@ rtm.PCB = function(t, state, parms){
   Aws <- 30 # cm2
   
   # Congener-specific constants
-  Kaw <- 0.018048667 # PCB 19 dimensionless Henry's law constant @ 25 C
-  dUaw <- 51590.22 # internal energy for the transfer of air-water for PCB 19 (J/mol)
+  Kaw <- pcp.data$Kaw # PCBi dimensionless Henry's law constant @ 25 C
+  dUaw <- pcp.data$dUaw # internal energy for the transfer of air-water for PCBi (J/mol)
   Kaw.t <- Kaw*exp(-dUaw / R * (1 / Tw.1 - 1 / Tst.1)) * Tw.1 / Tst.1
-  Kow <- 10^(5.02) # PCB 19 octanol-water equilibrium partition coefficient (low value!!)
-  dUow <-  -20988.94 # internal energy for the transfer of octanol-water for PCB 19 (J/mol)
+  Kow <- pcp.data$Kow # PCBi octanol-water equilibrium partition coefficient
+  dUow <-  pcp.data$dUow # internal energy for the transfer of octanol-water for PCBi (J/mol)
   Kow.t <- Kow*exp(-dUow / R * (1 / Tw.1 -  1/ Tst.1))
-  Koa <- 10^(7.765196745) # PCB 19 octanol-air equilibrium partition coefficient
+  Koa <- pcp.data$Koa # PCBi octanol-air equilibrium partition coefficient
   
   # PUF constants 
   Apuf <- 7.07 # cm2
