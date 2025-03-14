@@ -1,4 +1,4 @@
-
+## Preliminary script for PCB 19
 
 # Packages and libraries --------------------------------------------------
 # Install packages
@@ -18,6 +18,13 @@ install.packages("gridExtra")
   library(tidyr)
   library(gridExtra)
 }
+
+# Read data ---------------------------------------------------------------
+obs.data <- read.csv("Data/AVL_S_data_long.csv")
+# Physical chemical properties
+pcp.data <- read.csv("Data/AVL_S_PCP.csv")
+
+
 
 
 rtm.PCB = function(t, state, parms){
