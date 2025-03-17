@@ -118,92 +118,133 @@ rtm.PCB = function(t, state, parms, pcb_index){
   return(list(c(dCsdt, dCwdt, dCfdt, dCadt, dCpufdt)))
 }
 
-# Define the number of PCBs to optimize
-n <- 2  # Now testing for PCB1 and PCB2
-parms_list <- vector("list", n)  # Initialize list for parameters
-optimization_results <- vector("list", n)  # Initialize list for storing results
-
-# Define initial parameters
-init_parms <- c(
-  ro = 500,   # Initial guess for ro
-  ko = 10,    # Initial guess for ko
-  kdf = 2,    # Initial guess for kdf
-  kds = 0.5,  # Initial guess for kds
-  f = 0.5,    # Initial guess for f
-  ka = 100    # Initial guess for ka
-)
-
-# Define the objective function
-objective_function <- function(parms, pcb_index, obs.data) {
+# Function to optimize for a specific PCB column
+optimize_PCB <- function(pcb_column, obs.data) {
   
-  # Update parameter list for current PCB
-  parms_list[[pcb_index]] <<- list(
-    ro = parms[1],
-    ko = parms[2],
-    kdf = parms[3],
-    kds = parms[4],
-    f = parms[5],
-    ka = parms[6]
-  )
+  # Determine the column index if a name is provided
+  if (is.character(pcb_column)) {
+    pcb_index <- which(colnames(obs.data) == pcb_column)
+  } else {
+    pcb_index <- pcb_column
+  }
   
-  # Constants and initial conditions
-  ms <- 10      # [g]
-  M <- 0.1      # kg/L solid-water ratio
-  Vw <- 100     # [cm3]
-  Va <- 125     # [cm3]
-  Vf <- 0.000000069  # L/cm SPME
-  Vpuf <- 29    # cm3 volume of PUF
+  if (length(pcb_index) == 0) {
+    stop("Invalid PCB column name or index.")
+  }
   
-  # Extract initial concentrations and time range
-  Ct <- obs.data[25, paste0("PCB", pcb_index)]  # PCB concentration at t=25
-  Cs0 <- Ct * M * 1000  # Convert to ng/L
-  cinit <- c(Cs = Cs0, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
-  
-  # Extract time range for ODE
-  time_range <- obs.data$time[1:12]
-  
-  # Generate a more dynamic mock model for testing (using parms)
-  modeled_mf <- parms[5] * sin(time_range / 3)   # Sinusoidal model
-  modeled_mpuf <- parms[6] * cos(time_range / 3)  # Cosine model
-  
-  # Compute observed means
-  observed_means <- obs.data %>%
-    filter(sample != "sed") %>%
-    group_by(time) %>%
-    summarise(
-      mf_PCB = mean(get(paste0("PCB", pcb_index)), na.rm = TRUE),
-      mpuf_PCB = mean(get(paste0("PCB", pcb_index)), na.rm = TRUE),
-      .groups = "drop"
+  # Define the objective function
+  objective_function <- function(parms, obs.data) {
+    
+    # Constants and initial conditions
+    ms <- 10      # [g]
+    M <- 0.1      # kg/L solid-water ratio
+    Vw <- 100     # [cm3]
+    Va <- 125     # [cm3]
+    Vf <- 0.000000069  # L/cm SPME
+    Vpuf <- 29    # cm3 volume of PUF
+    
+    # Extract initial concentrations and time range
+    Ct <- obs.data[25, pcb_index]
+    Cs0 <- Ct * M * 1000  # Convert to ng/L
+    cinit <- c(Cs = Cs0, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
+    
+    # Extract time range for ODE
+    time_range <- obs.data$time[1:12]
+    
+    # Define a system of differential equations for the concentrations
+    rtm.PCB <- function(t, state, parms) {
+      Cs <- state[1]
+      Cw <- state[2]
+      Cf <- state[3]
+      Ca <- state[4]
+      Cpuf <- state[5]
+      
+      # Differential equations (as placeholders, use real equations here)
+      dCs <- -parms[1] * Cs + parms[2] * Cw
+      dCw <- parms[1] * Cs - parms[3] * Cw
+      dCf <- parms[4] * Cs - parms[5] * Cf
+      dCa <- parms[6] * Cf - parms[5] * Ca
+      dCpuf <- parms[6] * Ca - parms[4] * Cpuf
+      
+      list(c(dCs, dCw, dCf, dCa, dCpuf))
+    }
+    
+    # Solve the ODE system
+    result <- ode(y = cinit, times = time_range, func = rtm.PCB, parms = parms)
+    
+    # Extract the concentration values over time
+    Ca_sol <- result[, "Ca"]
+    Cpuf_sol <- result[, "Cpuf"]
+    
+    # Modeled values based on the ODE solution
+    modeled_mf <- Ca_sol * Vf  # [ng/cm]
+    modeled_mpuf <- Cpuf_sol * Vpuf / 1000  # [ng/puf]
+    
+    # Compute observed means for both "mf_PCB" and "mpuf_PCB" based on time
+    observed_means <- obs.data %>%
+      filter(sample %in% c("mpuf_PCB", "mf_PCB")) %>%
+      group_by(sample, time) %>%
+      summarise(
+        mean_PCB = mean(obs.data[[pcb_index]], na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    # Extract observed values for "mf_PCB" and "mpuf_PCB"
+    observed_mf <- observed_means %>%
+      filter(sample == "mf_PCB") %>%
+      pull(mean_PCB)
+    
+    observed_mpuf <- observed_means %>%
+      filter(sample == "mpuf_PCB") %>%
+      pull(mean_PCB)
+    
+    # Return observed and modeled data
+    data <- data.frame(
+      time = rep(time_range, 2),  # Time for both samples
+      observed = c(observed_mf, observed_mpuf),
+      modeled = c(modeled_mf, modeled_mpuf),
+      sample = rep(c("mf_PCB", "mpuf_PCB"), each = length(time_range))
     )
+    
+    return(data)
+  }
   
-  # Extract observed values
-  observed_mf <- observed_means$mf_PCB  
-  observed_mpuf <- observed_means$mpuf_PCB  
+  # Initial parameter guesses
+  init_parms <- c(ro = 500, ko = 10, kdf = 2, kds = 0.5, f = 0.6, ka = 100)
   
-  # Compute error
-  error_mf <- sum((observed_mf - modeled_mf)^2, na.rm = TRUE)
-  error_mpuf <- sum((observed_mpuf - modeled_mpuf)^2, na.rm = TRUE)
-  total_error <- error_mf + error_mpuf
-  
-  return(total_error)
-}
-
-# Run optimization for each PCB
-for (i in 1:n) {
+  # Run optimization
   result <- optim(
     par = init_parms,  
-    fn = function(parms) objective_function(parms, i, obs.data),  
+    fn = function(parms) objective_function(parms, obs.data),  
     method = "L-BFGS-B",
     lower = c(100, 1, 0.5, 0, 0.1, 50),
     upper = c(1000, 50, 5, 1, 1, 500)
   )
   
-  # Store results
-  optimization_results[[i]] <- result
+  # Extract the data for plotting
+  plot_data <- objective_function(result$par, obs.data)
+  
+  # Plot observed vs modeled data using ggplot2
+  library(ggplot2)
+  ggplot(plot_data, aes(x = time, y = observed, color = sample)) +
+    geom_line() +
+    geom_point(aes(y = modeled), shape = 1) +  # Modeled data as points
+    labs(
+      title = "Observed vs Modeled PCB Concentrations",
+      x = "Time",
+      y = "Concentration (ng/cm for mf_PCB, ng/puf for mpuf_PCB)"
+    ) +
+    theme_minimal() +
+    scale_color_manual(values = c("mf_PCB" = "blue", "mpuf_PCB" = "red"))  # Custom colors
+  
+  return(result)
 }
 
-# Print all optimization results
-for (i in 1:n) {
-  print(paste("Optimization result for PCB", i, ":"))
-  print(optimization_results[[i]])
-}
+# Example Usage: Optimize for PCB2 by name
+optimization_result <- optimize_PCB("PCB31", obs.data)
+
+# Example Usage: Optimize for the 3rd column
+optimization_result <- optimize_PCB(3, obs.data)
+
+# Print results
+print(optimization_result$par)
