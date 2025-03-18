@@ -22,7 +22,7 @@ install.packages("gridExtra")
 
 # Read data ---------------------------------------------------------------
 {
-  obs.data <- read.csv("Data/AVL_S_data_long.csv")
+  obs.data <- read.csv("Data/AVL_S_data_long.csv", check.names = FALSE)
   # Physical chemical properties
   pcp.data <- read.csv("Data/AVL_S_PCP.csv")
 }
@@ -117,6 +117,9 @@ rtm.PCB = function(t, state, parms, pcb_index){
   # The computed derivatives are returned as a list
   return(list(c(dCsdt, dCwdt, dCfdt, dCadt, dCpufdt)))
 }
+
+
+
 
 # Function to optimize for a specific PCB column
 optimize_PCB <- function(pcb_column, obs.data) {
