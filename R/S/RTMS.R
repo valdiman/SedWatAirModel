@@ -1,5 +1,8 @@
-## Script to investigate mass transfer coefficients
-# for PCBs using sediment from Altavista, VI. for shaken experiments.
+# Code to model PCB 19 in laboratory experiments
+# using sediment from Altavista, VI. Passive measurements
+# of PCB 19 in the water and the air phases are predicted and
+# linked to the water and air concentrations from the passive
+# samplers.
 
 # Packages and libraries --------------------------------------------------
 # Install packages
@@ -27,13 +30,30 @@ install.packages("gridExtra")
   pcp.data <- read.csv("Data/AVL_S_PCP.csv")
 }
 
+# Extract individual PCBi -------------------------------------------------
+{
+  pcb.name <- "PCB19"
+  obs.data.pcbi <- obs.data[, c("sampler", "time", pcb.name)]
+  pcp.data.pcbi <- pcp.data[pcp.data$congener == pcb.name, ]
+}
+
+# Organize data -----------------------------------------------------------
+{
+  spme <- obs.data.pcbi %>%
+    filter(sampler == "SPME")
+  puf <- obs.data.pcbi %>%
+    filter(sampler == "PUF")
+  sed <- obs.data.pcbi %>%
+    filter(sampler == "sed")
+}
+
 # Reactive transport function ---------------------------------------------
-rtm.PCB = function(t, state, parms, pcb_index){
+rtm.PCB19 = function(t, state, parms){
   
   # Experimental conditions
   MH2O <- 18.0152 # g/mol water molecular weight
   MCO2 <- 44.0094 # g/mol CO2 molecular weight
-  MW.pcb <- pcp.data$MW[pcb_index] # g/mol PCBi molecular weight
+  MW.pcb <- pcp.data.pcbi$MW # g/mol PCB 19 molecular weight
   R <- 8.3144 # J/(mol K) molar gas constant
   Tst <- 25 #C air temperature
   Tst.1 <- 273.15 + Tst # air and standard temperature in K, 25 C
@@ -47,13 +67,13 @@ rtm.PCB = function(t, state, parms, pcb_index){
   Aws <- 30 # cm2
   
   # Congener-specific constants
-  Kaw <- pcp.data$Kaw[pcb_index] # PCBi dimensionless Henry's law constant @ 25 C
-  dUaw <- pcp.data$dUaw[pcb_index] # internal energy for the transfer of air-water for PCBi (J/mol)
+  Kaw <- pcp.data.pcbi$Kaw # PCB 19 dimensionless Henry's law constant @ 25 C
+  dUaw <- pcp.data.pcbi$dUaw # internal energy for the transfer of air-water for PCB 19 (J/mol)
   Kaw.t <- Kaw*exp(-dUaw / R * (1 / Tw.1 - 1 / Tst.1)) * Tw.1 / Tst.1
-  Kow <- pcp.data$Kow[pcb_index] # PCBi octanol-water equilibrium partition coefficient
-  dUow <-  pcp.data$dUow[pcb_index] # internal energy for the transfer of octanol-water for PCBi (J/mol)
+  Kow <- pcp.data.pcbi$Kow # PCB 19 octanol-water equilibrium partition coefficient (low value!!)
+  dUow <-  pcp.data.pcbi$dUow # internal energy for the transfer of octanol-water for PCB 19 (J/mol)
   Kow.t <- Kow*exp(-dUow / R * (1 / Tw.1 -  1/ Tst.1))
-  Koa <- pcp.data$Koa[pcb_index] # PCBi octanol-air equilibrium partition coefficient
+  Koa <- pcp.data.pcbi$Koa # PCB 19 octanol-air equilibrium partition coefficient
   
   # PUF constants 
   Apuf <- 7.07 # cm2
@@ -63,10 +83,10 @@ rtm.PCB = function(t, state, parms, pcb_index){
   Kpuf <- Kpuf * d # [La/Lpuf]
   
   # SPME fiber constants
-  Af <- 0.138 # cm2/cm SPME area
-  Vf <- 0.000000069 * 1000 # cm3/cm SPME volume/area
-  L <- 1 # cm SPME length normalization to 1 cm
-  Kf <- 10^(1.06 * log10(Kow.t) - 1.16) # PCB 19-SPME equilibrium partition coefficient
+  Aspme <- 0.138 # cm2/cm SPME area
+  Vspme <- 0.000000069 * 1000 # cm3/cm SPME volume/area
+  Lspme <- 1 # cm SPME length normalization to 1 cm
+  Kspme <- 10^(1.06 * log10(Kow.t) - 1.16) # PCB 19-SPME equilibrium partition coefficient
   
   # Air & water physical conditions
   D.water.air <- 0.2743615 # cm2/s water's diffusion coefficient in the gas phase @ Tair = 25 C, patm = 1013.25 mbars 
@@ -88,6 +108,9 @@ rtm.PCB = function(t, state, parms, pcb_index){
   # iv) kaw, overall air-water mass transfer coefficient for PCB 19, units change
   kaw.o <- kaw.o*100*60*60*24 # [cm/d]
   
+  # Bioremediation rate
+  kb <- parms$kb
+  
   # Sorption and desorption rates
   kdf <- parms$kdf # 1/d
   kds <- parms$kds # 1/d
@@ -101,153 +124,186 @@ rtm.PCB = function(t, state, parms, pcb_index){
   # derivatives dx/dt are computed below
   Cs <- state[1]
   Cw <- state[2]
-  Cf <- state[3]
+  Cspme <- state[3]
   Ca <- state[4]
   Cpuf <- state[5]
   
   dCsdt <- - f * kdf * Cs - (1 - f) * kds * Cs + ka * Cw
   dCwdt <- - ka * Cw + f * kdf * Cs + (1 - f) * kds * Cs -
     kaw.o * Aaw / Vw * (Cw - Ca / Kaw.t) - 
-    ko * Af * L / Vw * (Cw - Cf / Kf) # [ng/L]
-  dCfdt <- ko * Af / Vf * (Cw - Cf / Kf) # Cw = [ng/L], Cf = [ng/L]
+    ko * Aspme * Lspme / Vw * (Cw - Cspme / Kspme) -
+    kb * Cw # [ng/L]
+  dCspmedt <- ko * Aspme / Vspme * (Cw - Cspme / Kspme) # Cw = [ng/L], Cspme = [ng/L]
   dCadt <- kaw.o * Aaw / Va * (Cw - Ca / Kaw.t) -
     ro * Apuf / Va * (Ca - Cpuf / Kpuf) # Ca = [ng/L]
   dCpufdt <- ro * Apuf / Vpuf * (Ca - Cpuf / Kpuf) # Ca = [ng/L], Cpuf = [ng/L]
   
   # The computed derivatives are returned as a list
-  return(list(c(dCsdt, dCwdt, dCfdt, dCadt, dCpufdt)))
+  return(list(c(dCsdt, dCwdt, dCspmedt, dCadt, dCpufdt)))
 }
 
+# Initial conditions and run function
+{
+  # Estimating Cs0
+  Ct <- sed$PCB19 # ng/g PCB 19 sediment concentration
+  M <- 0.1 # kg/L solid-water ratio
+  Cs0 <- Ct * M * 1000 # [ng/L]
+}
+cinit <- c(Cs = Cs0, Cw = 0, Cspme = 0, Ca = 0, Cpuf = 0)
+parms <- list(ro = 540.409, ko = 10, kdf = 1.9, kds = 0.001, f = 0.8,
+              ka = 150, kb = 0) # Input
+t.1 <- unique(spme$time)
+# Run the ODE function without specifying parms
+model.result <- ode(y = cinit, times = t.1, func = rtm.PCB19, parms = parms)
+head(model.result)
 
-
-
-# Function to optimize for a specific PCB column
-optimize_PCB <- function(pcb_column, obs.data) {
+{
+  # Transform Cf and Cpuf to mass/cm and mass/puf
+  model.result <- as.data.frame(model.result)
   
-  # Determine the column index if a name is provided
-  if (is.character(pcb_column)) {
-    pcb_index <- which(colnames(obs.data) == pcb_column)
-  } else {
-    pcb_index <- pcb_column
-  }
+  # Calculate Mf and Mpuf based on volumes
+  ms <- 10 # [g]
+  M <- 0.1 # kg/L solid-water ratio
+  Vw <- 100 # [cm3]
+  Va <- 125 # [cm3]
+  Vspme <- 0.000000069 # L/cm SPME
+  Vpuf <- 29 # cm3 volume of PUF
+  model.result$msed <- model.result$Cs * ms / (M * 1000)
+  model.result$mW <- model.result$Cw * Vw / 1000
+  model.result$mspme <- model.result$Cspme * Vspme  # [ng/cm]
+  model.result$mA <-  model.result$Ca * Va / 1000
+  model.result$mpuf <- model.result$Cpuf * Vpuf / 1000 # [ng/puf]
+  model.result$Mt <- model.result$msed + model.result$mW + model.result$Cspme * Vspme +
+    model.result$mA + model.result$Cpuf * Vpuf / 1000
   
-  if (length(pcb_index) == 0) {
-    stop("Invalid PCB column name or index.")
-  }
-  
-  # Define the objective function
-  objective_function <- function(parms, obs.data) {
-    
-    # Constants and initial conditions
-    ms <- 10      # [g]
-    M <- 0.1      # kg/L solid-water ratio
-    Vw <- 100     # [cm3]
-    Va <- 125     # [cm3]
-    Vf <- 0.000000069  # L/cm SPME
-    Vpuf <- 29    # cm3 volume of PUF
-    
-    # Extract initial concentrations and time range
-    Ct <- obs.data[25, pcb_index]
-    Cs0 <- Ct * M * 1000  # Convert to ng/L
-    cinit <- c(Cs = Cs0, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
-    
-    # Extract time range for ODE
-    time_range <- obs.data$time[1:12]
-    
-    # Define a system of differential equations for the concentrations
-    rtm.PCB <- function(t, state, parms) {
-      Cs <- state[1]
-      Cw <- state[2]
-      Cf <- state[3]
-      Ca <- state[4]
-      Cpuf <- state[5]
-      
-      # Differential equations (as placeholders, use real equations here)
-      dCs <- -parms[1] * Cs + parms[2] * Cw
-      dCw <- parms[1] * Cs - parms[3] * Cw
-      dCf <- parms[4] * Cs - parms[5] * Cf
-      dCa <- parms[6] * Cf - parms[5] * Ca
-      dCpuf <- parms[6] * Ca - parms[4] * Cpuf
-      
-      list(c(dCs, dCw, dCf, dCa, dCpuf))
-    }
-    
-    # Solve the ODE system
-    result <- ode(y = cinit, times = time_range, func = rtm.PCB, parms = parms)
-    
-    # Extract the concentration values over time
-    Ca_sol <- result[, "Ca"]
-    Cpuf_sol <- result[, "Cpuf"]
-    
-    # Modeled values based on the ODE solution
-    modeled_mf <- Ca_sol * Vf  # [ng/cm]
-    modeled_mpuf <- Cpuf_sol * Vpuf / 1000  # [ng/puf]
-    
-    # Compute observed means for both "mf_PCB" and "mpuf_PCB" based on time
-    observed_means <- obs.data %>%
-      filter(sample %in% c("mpuf_PCB", "mf_PCB")) %>%
-      group_by(sample, time) %>%
-      summarise(
-        mean_PCB = mean(obs.data[[pcb_index]], na.rm = TRUE),
-        .groups = "drop"
-      )
-    
-    # Extract observed values for "mf_PCB" and "mpuf_PCB"
-    observed_mf <- observed_means %>%
-      filter(sample == "mf_PCB") %>%
-      pull(mean_PCB)
-    
-    observed_mpuf <- observed_means %>%
-      filter(sample == "mpuf_PCB") %>%
-      pull(mean_PCB)
-    
-    # Return observed and modeled data
-    data <- data.frame(
-      time = rep(time_range, 2),  # Time for both samples
-      observed = c(observed_mf, observed_mpuf),
-      modeled = c(modeled_mf, modeled_mpuf),
-      sample = rep(c("mf_PCB", "mpuf_PCB"), each = length(time_range))
-    )
-    
-    return(data)
-  }
-  
-  # Initial parameter guesses
-  init_parms <- c(ro = 500, ko = 10, kdf = 2, kds = 0.5, f = 0.6, ka = 100)
-  
-  # Run optimization
-  result <- optim(
-    par = init_parms,  
-    fn = function(parms) objective_function(parms, obs.data),  
-    method = "L-BFGS-B",
-    lower = c(100, 1, 0.5, 0, 0.1, 50),
-    upper = c(1000, 50, 5, 1, 1, 500)
+  # Filter out SPME and PUF rows
+  spme <- obs.data.pcbi[obs.data.pcbi$sampler == "SPME", c("time", "PCB19")]
+  puf  <- obs.data.pcbi[obs.data.pcbi$sampler == "PUF",  c("time", "PCB19")]
+  # Combine them by row
+  obs.data.pcbi.2 <- data.frame(
+    time = spme$time,
+    SPME = spme$PCB19,
+    PUF  = puf$PCB19
   )
   
-  # Extract the data for plotting
-  plot_data <- objective_function(result$par, obs.data)
+  # Convert model results to tibble and select relevant columns
+  model_results <- as_tibble(model.result) %>%
+    mutate(time = as.numeric(time)) %>%
+    select(time, mspme, mpuf)
   
-  # Plot observed vs modeled data using ggplot2
-  library(ggplot2)
-  ggplot(plot_data, aes(x = time, y = observed, color = sample)) +
-    geom_line() +
-    geom_point(aes(y = modeled), shape = 1) +  # Modeled data as points
-    labs(
-      title = "Observed vs Modeled PCB Concentrations",
-      x = "Time",
-      y = "Concentration (ng/cm for mf_PCB, ng/puf for mpuf_PCB)"
-    ) +
-    theme_minimal() +
-    scale_color_manual(values = c("mf_PCB" = "blue", "mpuf_PCB" = "red"))  # Custom colors
+  # Merge model results with observed data
+  comparison_data <- model_results %>%
+    left_join(obs.data.pcbi.2, by = "time")
   
-  return(result)
+  # Calculate the averages of mf and mpuf within each group (e.g., per time)
+  grouped_comparison <- comparison_data %>%
+    group_by(time) %>%  # Adjust the grouping variable if needed
+    summarise(
+      avg_mspme_model = mean(mspme, na.rm = TRUE),
+      avg_mspme_observed = mean(SPME, na.rm = TRUE),
+      avg_mpuf_model = mean(mpuf, na.rm = TRUE),
+      avg_mpuf_observed = mean(PUF, na.rm = TRUE)
+    )
+  
+  # Define function to calculate R-squared, handling NA values
+  m_r2 <- function(predicted, observed) {
+    # Remove NA values from both predicted and observed
+    valid_indices <- complete.cases(predicted, observed)
+    predicted <- predicted[valid_indices]
+    observed <- observed[valid_indices]
+    
+    # Calculate R-squared
+    ss_total <- sum((observed - mean(observed))^2)
+    ss_residual <- sum((observed - predicted)^2)
+    1 - (ss_residual / ss_total)
+  }
+  
+  # Calculate R-squared values based on grouped average data
+  mspme_r2_value <- m_r2(grouped_comparison$avg_mspme_model, grouped_comparison$avg_mspme_observed)
+  mpuf_r2_value <- m_r2(grouped_comparison$avg_mpuf_model, grouped_comparison$avg_mpuf_observed)
+  
+  # Print R-squared values
+  print(paste("R-squared for mspme (average): ", mspme_r2_value))
+  print(paste("R-squared for mpuf (average): ", mpuf_r2_value))
+  
+  # Plot
+  # Run the model with the new time sequence
+  cinit <- c(Cs = Cs0, Cw = 0, Cspme = 0, Ca = 0, Cpuf = 0)
+  t_daily <- seq(0, 40, by = 1)  # Adjust according to your needs
+  out_daily <- ode(y = cinit, times = t_daily, func = rtm.PCB19, parms = parms)
+  head(out_daily)
+  
+  # Transform Cf and Cpuf to mass/cm and mass/puf
+  out.daily <- as.data.frame(out_daily)
+  colnames(out.daily) <- c("time", "Cs", "Cw", "Cspme", "Ca", "Cpuf")
+  
+  # Calculate Mf and Mpuf based on volumes
+  out.daily$mspme <- out.daily$Cspme * Vspme # [ng]
+  out.daily$mpuf <- out.daily$Cpuf * Vpuf / 1000  # [ng] Check this 10!!
+  
+  # Convert model results to tibble and ensure numeric values
+  model_results_daily_clean <- as_tibble(out.daily) %>%
+    mutate(across(c(mspme, mpuf, Cw, time), as.numeric)) %>%  # Ensure all relevant columns are numeric
+    select(time, mspme, mpuf)
+  
+  # Export data
+  write.csv(model_results_daily_clean, file = "Output/Data/RTM/S/AVL/PCB19AVLSControlFV.csv")
+  
+  # Prepare model data for plotting
+  model_data_long <- model_results_daily_clean %>%
+    pivot_longer(cols = c(mspme, mpuf), 
+                 names_to = "variable", 
+                 values_to = "model_value") %>%
+    mutate(type = "Model")
+  
+  # Clean observed data and prepare for plotting
+  observed_data_clean <- obs.data.pcbi.2 %>%
+    pivot_longer(cols = c(SPME, PUF), 
+                 names_to = "variable", 
+                 values_to = "observed_value") %>%
+    mutate(variable = recode(variable, 
+                             "SPME" = "mspme", 
+                             "PUF" = "mpuf"),
+           type = "Observed")
+  
+  plot_data_daily <- bind_rows(
+    model_data_long %>%
+      rename(value = model_value) %>%
+      mutate(type = "Model"),
+    observed_data_clean %>%
+      rename(value = observed_value) %>%
+      mutate(type = "Observed")
+  )
+  
+  # Plot mf
+  p_spme <- ggplot(plot_data_daily %>% filter(variable == "mspme"), aes(x = time)) +
+    geom_line(data = . %>% filter(type == "Model"),
+              aes(y = value, color = "Model"), linewidth = 1) +
+    geom_point(data = . %>% filter(type == "Observed"),
+               aes(y = value, color = "Observed"), size = 2) +
+    labs(x = "Time", y = "mf [ng/cm]") +
+    scale_color_manual(values = c("Model" = "blue", "Observed" = "red")) +
+    theme_bw() +
+    theme(legend.title = element_blank())
+  
+  # Plot mpuf
+  p_puf <- ggplot(plot_data_daily %>% filter(variable == "mpuf"), aes(x = time)) +
+    geom_line(data = . %>% filter(type == "Model"),
+              aes(y = value, color = "Model"), linewidth = 1) +
+    geom_point(data = . %>% filter(type == "Observed"),
+               aes(y = value, color = "Observed"), size = 2) +
+    labs(x = "Time", y = "mpuf [ng/PUF]") +
+    scale_color_manual(values = c("Model" = "blue", "Observed" = "red")) +
+    theme_bw() +
+    theme(legend.title = element_blank())
+  
 }
 
-# Example Usage: Optimize for PCB2 by name
-optimization_result <- optimize_PCB("PCB31", obs.data)
+# Arrange plots side by side
+p.19 <- grid.arrange(p_spme, p_puf, ncol = 2)
 
-# Example Usage: Optimize for the 3rd column
-optimization_result <- optimize_PCB(3, obs.data)
+# Save plot in folder
+ggsave("Output/Plots/RTM/S/AVL/PCB19ALV_S_ControlFV.png", plot = p.19, width = 15,
+       height = 5, dpi = 500)
 
-# Print results
-print(optimization_result$par)
+
