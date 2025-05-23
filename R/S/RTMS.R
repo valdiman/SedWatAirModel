@@ -42,7 +42,8 @@ install.packages("gridExtra")
   spme <- obs.data.pcbi %>%
     filter(sampler == "SPME")
   puf <- obs.data.pcbi %>%
-    filter(sampler == "PUF")
+    filter(sampler == "PUF") %>%
+    mutate(across(starts_with("PCB"),  ~ . * 10))
   sed <- obs.data.pcbi %>%
     filter(sampler == "sed")
 }
@@ -183,7 +184,7 @@ head(model.result)
   obs.data.pcbi.2 <- data.frame(
     time = spme$time,
     SPME = spme$PCB19,
-    PUF  = puf$PCB19
+    PUF  = puf$PCB19 * 10
   )
   
   # Convert model results to tibble and select relevant columns
@@ -247,7 +248,7 @@ head(model.result)
     select(time, mspme, mpuf)
   
   # Export data
-  write.csv(model_results_daily_clean, file = "Output/Data/RTM/S/AVL/PCB19AVLSControlFV.csv")
+  #write.csv(model_results_daily_clean, file = "Output/Data/RTM/S/AVL/PCB19AVLSControlFV.csv")
   
   # Prepare model data for plotting
   model_data_long <- model_results_daily_clean %>%
@@ -303,7 +304,7 @@ head(model.result)
 p.19 <- grid.arrange(p_spme, p_puf, ncol = 2)
 
 # Save plot in folder
-ggsave("Output/Plots/RTM/S/AVL/PCB19ALV_S_ControlFV.png", plot = p.19, width = 15,
-       height = 5, dpi = 500)
+#ggsave("Output/Plots/RTM/S/AVL/PCB19ALV_S_ControlFV.png", plot = p.19, width = 15,
+#       height = 5, dpi = 500)
 
 
