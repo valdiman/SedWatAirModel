@@ -308,3 +308,41 @@ p.19 <- grid.arrange(p_spme, p_puf, ncol = 2)
 #       height = 5, dpi = 500)
 
 
+# Recalculate msed from mass balance
+model.result <- model.result %>%
+  mutate(
+    msed.mb = Mt - mW - mspme - mA - mpuf,  # mb = mass balance
+    Cs.mb = msed.mb * M * 1000 / ms
+  )
+
+# Estimate dCs/dt numerically (e.g., using finite differences)
+model.result <- model.result %>%
+  arrange(time) %>%
+  mutate(dCsdt = c(NA, diff(Cs.mb) / diff(time)))
+
+# Remove first NA row for fitting
+fit_data <- model.result %>%
+  filter(!is.na(dCsdt)) %>%
+  select(time, Cs.mb, dCsdt, Cw)
+
+# Define constants from your model
+f <- parms$f
+ka <- parms$ka
+
+# Fit kdf and kds by minimizing residuals
+fit_model <- nls(
+  dCsdt ~ -K * Cs.mb + ka * Cw,
+  data = fit_data,
+  start = list(K = 1),
+  control = list(maxiter = 200),
+  algorithm = "port",
+  lower = c(K = 0)
+)
+summary(fit_model)
+
+K_est <- coef(fit_model)["K"]
+# If you fix kds (say, to 0.001), then:
+kds_fixed <- 0.001
+kdf_est <- (K_est - (1 - f) * kds_fixed) / f
+
+
