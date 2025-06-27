@@ -223,7 +223,9 @@ fine_out <- ode(y = cinit, times = fine_time, func = rtm.PCBi, parms = best_parm
 fine_out_df <- as.data.frame(fine_out) %>%
   mutate(
     mspme = Cspme * 6.9e-8,  # [ng/cm]
-    mpuf = Cpuf * 29 / 1000   # [ng/puf]
+    mpuf = Cpuf * 29 / 1000,   # [ng/puf]
+    Mt = (Cs * 0.01) + (Cw * 0.1) +
+      mspme + (Ca * 0.125) + mpuf
   )
 
 # SPME Plot
