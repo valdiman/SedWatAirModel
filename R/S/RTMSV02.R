@@ -28,7 +28,7 @@ install.packages("FME")
 
 # Extract individual PCBi -------------------------------------------------
 {
-  pcb.name <- "PCB20+28"
+  pcb.name <- "PCB19"
   obs.data.pcbi <- obs.data[, c("sampler", "time", pcb.name)]
   pcp.data.pcbi <- pcp.data[pcp.data$congener == pcb.name, ]
 }
@@ -257,3 +257,58 @@ puf_plot <- ggplot() +
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
 print(puf_plot)
+
+# Calculate goodness-of-fit metrics ----------------------------------------
+
+# 1. Prepare observed and predicted data
+obs_pred <- obs.data.pcbi.2 %>%
+  left_join(as.data.frame(final_out), by = "time") %>%
+  mutate(
+    pred_spme = Cspme * 6.9e-8,
+    pred_puf = Cpuf * 29 / 1000
+  )
+
+# 2. Calculate metrics for SPME
+spme_metrics <- obs_pred %>%
+  filter(!is.na(SPME)) %>%
+  summarise(
+    RMSE_spme = sqrt(mean((SPME - pred_spme)^2)),
+    MAE_spme = mean(abs(SPME - pred_spme)),
+    R2_spme = cor(SPME, pred_spme)^2,
+    NSE_spme = 1 - sum((SPME - pred_spme)^2)/sum((SPME - mean(SPME))^2)
+  )
+
+# 3. Calculate metrics for PUF
+puf_metrics <- obs_pred %>%
+  filter(!is.na(PUF)) %>%
+  summarise(
+    RMSE_puf = sqrt(mean((PUF - pred_puf)^2)),
+    MAE_puf = mean(abs(PUF - pred_puf)),
+    R2_puf = cor(PUF, pred_puf)^2,
+    NSE_puf = 1 - sum((PUF - pred_puf)^2)/sum((PUF - mean(PUF))^2)
+  )
+
+# 4. Print metrics
+cat("\nSPME Metrics:\n")
+print(spme_metrics)
+cat("\nPUF Metrics:\n")
+print(puf_metrics)
+
+# 5. Add metrics to plots
+spme_plot <- spme_plot +
+  annotate("text", x = max(t.1)*0.7, y = max(obs_pred$SPME, na.rm=TRUE)*0.9,
+           label = paste0("R² = ", round(spme_metrics$R2_spme, 3), "\n",
+                          "RMSE = ", round(spme_metrics$RMSE_spme, 3)),
+           hjust = 0, size = 4)
+
+puf_plot <- puf_plot +
+  annotate("text", x = max(t.1)*0.7, y = max(obs_pred$PUF, na.rm=TRUE)*0.9,
+           label = paste0("R² = ", round(puf_metrics$R2_puf, 3), "\n",
+                          "RMSE = ", round(puf_metrics$RMSE_puf, 3)),
+           hjust = 0, size = 4)
+
+# Re-print plots
+print(spme_plot)
+print(puf_plot)
+
+
