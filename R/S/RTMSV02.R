@@ -211,7 +211,7 @@ final_out_df <- as.data.frame(final_out) %>%
   mutate(
     mspme = Cspme * 6.9e-8,
     mpuf = Cpuf * 29 / 1000,
-    Mt = (Cs * 10 / 100) + (Cw * 0.1) + mspme + (Ca * 0.125) + mpuf
+    Mt = (Cs * 10 / (0.1 * 1000)) + (Cw * 0.1) + mspme + (Ca * 0.125) + mpuf
   )
 
 # 8. Visualization
@@ -224,8 +224,7 @@ fine_out_df <- as.data.frame(fine_out) %>%
   mutate(
     mspme = Cspme * 6.9e-8,  # [ng/cm]
     mpuf = Cpuf * 29 / 1000,   # [ng/puf]
-    Mt = (Cs * 0.01) + (Cw * 0.1) +
-      mspme + (Ca * 0.125) + mpuf
+    Mt = (Cs * 10 / (0.1 * 1000)) + (Cw * 0.1) + mspme + (Ca * 0.125) + mpuf
   )
 
 # SPME Plot
@@ -261,7 +260,6 @@ puf_plot <- ggplot() +
 print(puf_plot)
 
 # Calculate goodness-of-fit metrics ----------------------------------------
-
 # 1. Prepare observed and predicted data
 obs_pred <- obs.data.pcbi.2 %>%
   left_join(as.data.frame(final_out), by = "time") %>%
@@ -305,7 +303,7 @@ spme_plot <- spme_plot +
 
 puf_plot <- puf_plot +
   annotate("text", x = max(t.1)*0.7, y = max(obs_pred$PUF, na.rm=TRUE)*0.9,
-           label = paste0("R² = ", round(puf_metrics$R2_puf, 3), "\n",
+           label = paste0("R² = ", round(puf_metrics$R2_puf, 4), "\n",
                           "RMSE = ", round(puf_metrics$RMSE_puf, 3)),
            hjust = 0, size = 4)
 
