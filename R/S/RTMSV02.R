@@ -1,4 +1,4 @@
-# === 1. Packages & Libraries ===
+# === 1. Packages & Libraries === -----------------------------------------
 # Install packages
 install.packages("dplyr")
 install.packages("reshape2")
@@ -19,21 +19,21 @@ install.packages("FME")
   library(FME)
 }
 
-# === 2. Data Input ===
+# === 2. Data Input === ---------------------------------------------------
 obs.data <- read.csv("Data/AVL_S_data_long.csv", check.names = FALSE)
 pcp.data <- read.csv("Data/AVL_S_PCP.csv")
 
-# === 3. Select Target PCB Congener ===
-pcb.name <- "PCB19"
+# === 3. Select Target PCB Congener === -----------------------------------
+pcb.name <- "PCB52"
 obs.data.pcbi <- obs.data[, c("sampler", "time", pcb.name)]
 pcp.data.pcbi <- pcp.data[pcp.data$congener == pcb.name, ]
 
-# === 4. Organize Observations ===
+# === 4. Organize Observations === ----------------------------------------
 spme <- obs.data.pcbi %>% filter(sampler == "SPME")
 puf  <- obs.data.pcbi %>% filter(sampler == "PUF") %>% mutate(across(starts_with("PCB"), ~ . * 10))
 sed  <- obs.data.pcbi %>% filter(sampler == "sed")
 
-# === 5. Reactive Transport Model Function ===
+# === 5. Reactive Transport Model Function === ----------------------------
 rtm.PCBi <- function(t, state, parms) {
   # Constants
   MH2O <- 18.0152; MCO2 <- 44.0094; R <- 8.3144
@@ -96,13 +96,13 @@ rtm.PCBi <- function(t, state, parms) {
   })
 }
 
-# === 6. Initial Conditions ===
+# === 6. Initial Conditions === -------------------------------------------
 Ct <- sed %>% pull(!!sym(pcb.name)) # [ng/g]
 M <- 0.1 # [kg/L]
 Cs0 <- Ct * M * 1000 # [ng/L]
 cinit <- c(Cs = Cs0, Cw = 0, Cspme = 0, Ca = 0, Cpuf = 0)
 
-# === 7. Format Observed Data for Fitting ===
+# === 7. Format Observed Data for Fitting === -----------------------------
 obs.data.pcbi.2 <- obs.data.pcbi %>%
   filter(sampler %in% c("SPME", "PUF")) %>%
   group_by(time, sampler) %>%
@@ -110,10 +110,10 @@ obs.data.pcbi.2 <- obs.data.pcbi %>%
   pivot_wider(names_from = sampler, values_from = all_of(pcb.name)) %>%
   mutate(PUF = as.numeric(PUF) * 10, SPME = as.numeric(SPME))
 
-# === 8. Define Time Points ===
+# === 8. Define Time Points === -------------------------------------------
 t.1 <- unique(obs.data.pcbi.2$time)
 
-# === 9. Cost Function ===
+# === 9. Cost Function === ------------------------------------------------
 cost_func <- function(parms) {
   out <- ode(y = cinit, times = t.1, func = rtm.PCBi, parms = list(
     ro = parms["ro"], ko = parms["ko"], kdf = parms["kdf"],
@@ -128,15 +128,15 @@ cost_func <- function(parms) {
   c(pred_spme - obs$SPME, pred_puf - obs$PUF)
 }
 
-# === 10. Fit Model ===
+# === 10. Fit Model === ---------------------------------------------------
 par_guess <- c(ro = 540, ko = 10, kdf = 1.9, kds = 0.001, f = 0.8, ka = 150)
-bounds <- list(lower = c(ro = 1, ko = 1e-3, kdf = 1e-3, kds = 1e-6, f = 0, ka = 1),
-               upper = c(ro = 1e4, ko = 1e3, kdf = 10, kds = 1, f = 1, ka = 1e3))
+bounds <- list(lower = c(ro = 100, ko = 0.1, kdf = 0.01, kds = 1e-5, f = 0.3, ka = 1),
+               upper = c(ro = 900, ko = 100, kdf = 10, kds = 0.5, f = 0.95, ka = 900))
 
 fit <- modFit(f = cost_func, p = par_guess, lower = bounds$lower, upper = bounds$upper)
 summary(fit)
 
-# === 11. Final Model Run ===
+# === 11. Final Model Run === ---------------------------------------------
 best_parms <- as.list(fit$par); best_parms$kb <- 0
 final_out_df <- ode(y = cinit, times = t.1, func = rtm.PCBi, parms = best_parms) %>%
   as.data.frame() %>%
@@ -146,16 +146,17 @@ final_out_df <- ode(y = cinit, times = t.1, func = rtm.PCBi, parms = best_parms)
     Mt = (Cs * 10 / (0.1 * 1000)) + (Cw * 0.1) + mspme + (Ca * 0.125) + mpuf
   )
 
-# === 12. Fine Prediction ===
+# === 12. Fine Prediction === ---------------------------------------------
 fine_time <- seq(min(t.1), max(t.1), by = 0.5)
 fine_out_df <- ode(y = cinit, times = fine_time, func = rtm.PCBi, parms = best_parms) %>%
   as.data.frame() %>%
   mutate(
     mspme = Cspme * 6.9e-8,
-    mpuf = Cpuf * 29 / 1000
+    mpuf = Cpuf * 29 / 1000,
+    Mt = (Cs * 10 / (0.1 * 1000)) + (Cw * 0.1) + mspme + (Ca * 0.125) + mpuf
   )
 
-# === 13. Model Fit Evaluation ===
+# === 13. Model Fit Evaluation === ----------------------------------------
 obs_pred <- obs.data.pcbi.2 %>%
   left_join(final_out_df, by = "time") %>%
   mutate(
@@ -175,7 +176,7 @@ metrics <- function(obs, pred) {
 spme_metrics <- metrics(obs_pred$SPME, obs_pred$pred_spme)
 puf_metrics  <- metrics(obs_pred$PUF, obs_pred$pred_puf)
 
-# === 14. Plots ===
+# === 14. Plots === -------------------------------------------------------
 plot_func <- function(data, obs_col, pred_col, title, ylab, col_obs, col_pred, shape) {
   ggplot() +
     geom_line(data = fine_out_df, aes(time, !!sym(pred_col), color = "Predicted"), linewidth = 0.8) +
@@ -188,7 +189,7 @@ plot_func <- function(data, obs_col, pred_col, title, ylab, col_obs, col_pred, s
 
 spme_plot <- plot_func(obs_pred, "SPME", "mspme", "SPME: Model Fit", "Mass (ng/cm)", "red", "blue", 19) +
   annotate("text", x = max(t.1)*0.7, y = max(obs_pred$SPME, na.rm = TRUE)*0.9,
-           label = paste0("R² = ", round(spme_metrics$R2, 3), "\nRMSE = ", round(spme_metrics$RMSE, 3))
+           label = paste0("R² = ", round(spme_metrics$R2, 3), "\nRMSE = ", round(spme_metrics$RMSE, 3)),
            hjust = 0, size = 4)
 
 puf_plot <- plot_func(obs_pred, "PUF", "mpuf", "PUF: Model Fit", "Mass (ng/puf)", "green4", "orange2", 17) +
