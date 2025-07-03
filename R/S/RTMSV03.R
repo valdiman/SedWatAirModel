@@ -24,7 +24,7 @@ obs.data <- read.csv("Data/AVL_S_data_long.csv", check.names = FALSE)
 pcp.data <- read.csv("Data/AVL_S_PCP.csv")
 
 # === 3. Select Target PCB Congener === -----------------------------------
-pcb.name <- "PCB110"
+pcb.name <- "PCB44+47+65"
 obs.data.pcbi <- obs.data[, c("sampler", "time", pcb.name)]
 pcp.data.pcbi <- pcp.data[pcp.data$congener == pcb.name, ]
 
@@ -121,9 +121,9 @@ cost_func <- function(parms) {
 }
 
 # === 10. Fit Model === ---------------------------------------------------
-par_guess <- c(ro = 500, ks = 1, ka = 150)
-bounds <- list(lower = c(ro = 100, ks = 0.05, ka = 1),
-               upper = c(ro = 900, ks = 20, ka = 900))
+par_guess <- c(ro = 500, ks = 10, ka = 250)
+bounds <- list(lower = c(ro = 100, ks = 1, ka = 100),
+               upper = c(ro = 1500, ks = 80, ka = 3500))
 
 fit <- modFit(f = cost_func, p = par_guess, lower = bounds$lower, upper = bounds$upper)
 summary(fit)
