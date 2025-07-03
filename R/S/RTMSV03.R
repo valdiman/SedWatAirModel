@@ -24,7 +24,7 @@ obs.data <- read.csv("Data/AVL_S_data_long.csv", check.names = FALSE)
 pcp.data <- read.csv("Data/AVL_S_PCP.csv")
 
 # === 3. Select Target PCB Congener === -----------------------------------
-pcb.name <- "PCB44+47+65"
+pcb.name <- "PCB16"
 obs.data.pcbi <- obs.data[, c("sampler", "time", pcb.name)]
 pcp.data.pcbi <- pcp.data[pcp.data$congener == pcb.name, ]
 
@@ -58,6 +58,7 @@ rtm.PCBi <- function(t, state, parms) {
   Apuf <- 7.07; Vpuf <- 29
   d <- 0.0213 * 100^3
   Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * d
+  ro <- 540
   
   # Physical Conditions
   D.water.air <- 0.2743615
@@ -109,8 +110,7 @@ t.1 <- unique(obs.data.pcbi.2$time)
 # === 9. Cost Function === ------------------------------------------------
 cost_func <- function(parms) {
   out <- ode(y = cinit, times = t.1, func = rtm.PCBi, parms = list(
-    ro = parms["ro"], ks = parms["ks"],
-    ka = parms["ka"], kb = 0
+    ks = parms["ks"], ka = parms["ka"], kb = 0
   ))
   out_df <- as.data.frame(out)
   
@@ -121,9 +121,9 @@ cost_func <- function(parms) {
 }
 
 # === 10. Fit Model === ---------------------------------------------------
-par_guess <- c(ro = 500, ks = 10, ka = 250)
-bounds <- list(lower = c(ro = 100, ks = 1, ka = 100),
-               upper = c(ro = 1500, ks = 80, ka = 3500))
+par_guess <- c(ks = 1, ka = 200)
+bounds <- list(lower = c(ks = 0.1, ka = 100),
+               upper = c(ks = 80, ka = 700))
 
 fit <- modFit(f = cost_func, p = par_guess, lower = bounds$lower, upper = bounds$upper)
 summary(fit)
