@@ -137,9 +137,8 @@ rtm.PCB19 = function(t, state, parms){
   SC.pcb.w <- v.H2O / D.pcb.water # Schmidt number PCB 19
   
   # Porewater-water MTC (kpw)
-  bl <- 0.21 # cm boundary layer thickness
+  bl <- 0.1 # cm boundary layer thickness
   kpw <- D.pcb.water * 60 * 60 * 24 / bl # [cm/d]
-  kpw.m.d <- kpw / 100 # [m/d]
   
   # Air-water mass MTC (kaw.o)
   # i) Kaw.a, air-side mass transfer coefficient
@@ -152,8 +151,8 @@ rtm.PCB19 = function(t, state, parms){
   kaw.o <- kaw.o * 100 * 60 * 60 * 24 # [cm/d]
   
   # Sediment-porewater radial diffusion model (ksed)
-  logksed <- -0.832 * log10(Kow.t) + 1.4 # [1/d] From Koelmans et al, Environ. Sci. Technol. 2010, 44, 3014–3020
-  ksed <- 10^(logksed)
+  # logksed <- -0.832 * log10(Kow.t) + 1.4 # [1/d] From Koelmans et al, Environ. Sci. Technol. 2010, 44, 3014–3020
+  ksed <- 10
   
   # Bioremediation rate
   kb <- parms$kb
