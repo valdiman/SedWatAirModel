@@ -1,32 +1,42 @@
-# Cleaned full script: read observations, define ODE, fit ksed, report results
-# Requires: deSolve, dplyr, tibble
+# Fit sediment desorption rate (ksed) for PCB transport model.
+
+# Packages and libraries --------------------------------------------------
+# Install packages
+install.packages("dplyr")
+install.packages("deSolve")
+install.packages("tibble")
+
+# Load libraries
 {
   library(deSolve)
   library(dplyr)
   library(tibble)
 }
 
-
 # -------------------------
 # 1) Read & prepare observed data (PCB_32, Control)
 # -------------------------
-exp.data <- read.csv("Data/uncoated_biochar_V2.csv")
+# Non-shaken data
+exp.ns.data <- read.csv("Data/01_NS_SPME_PUF.csv")
+# Gentle shaken data
+exp.gs.data <- read.csv("Data/02_GS_SPME_PUF.csv")
 
-pcb.ind <- "PCB_4"
-pcbi <- exp.data[, c("Sample_medium", "Experiment", "percent_biochar",
+pcb.ind <- "PCB_32"
+
+pcbi <- exp.gs.data[, c("Sample_medium", "percent_biochar",
                      "Group", "time", "Replicate", pcb.ind)]
 
 # SPME control samples (mf)
 pcbi.spme.control <- pcbi %>%
-  filter(Sample_medium == "SPME", Experiment == "biochar_timeseries",
-         Group == "Control", percent_biochar == 0.0) %>%
+  filter(Sample_medium == "SPME", Group == "Control",
+         percent_biochar == 0.0) %>%
   rename(mf_control = !!sym(pcb.ind)) %>%
   select(time, mf_control)
 
 # PUF control samples (mpuf)
 pcbi.puf.control <- pcbi %>%
-  filter(Sample_medium == "PUF", Experiment == "biochar_timeseries",
-         Group == "Control", percent_biochar == 0.0) %>%
+  filter(Sample_medium == "PUF", Group == "Control",
+         percent_biochar == 0.0) %>%
   rename(mpuf_control = !!sym(pcb.ind)) %>%
   select(time, mpuf_control)
 
@@ -122,7 +132,7 @@ rtm_simple <- function(t, state, parms) {
 #   2) set Abraham descriptors (E,S,A,B,Vpar) if you want Kd from Abraham
 #   3) set foc (fraction organic carbon) if using Abraham Koc -> Kd
 # read data
-pc <- read.csv("Data/PhysicalChemicalProperties.csv")
+pc <- read.csv("Data/04_PCP.csv")
 
 pc_row <- pc[pc$congener == pcb.ind, ]
 
@@ -138,7 +148,7 @@ A <- pc_row$A
 B <- pc_row$B
 V <- pc_row$V
 
-foc <- 0.03                # <- change if you have another foc
+foc <- 0.03
 
 # physical constants & temps (usually do not change)
 MH2O <- 18.0152; MCO2 <- 44.0094
@@ -154,8 +164,8 @@ Kaw.t <- Kaw * exp(-dUaw / R * (1 / Tw.1 - 1 / Tst.1)) * Tw.1 / Tst.1
 # PUF & SPME parameters
 Apuf <- 7.07
 Vpuf_cm3 <- 29
-d_bulk <- 0.0213 * 100^3
-Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * d_bulk
+d_puf <- 0.0213 * 100^3
+Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * d_puf
 
 Af <- 0.138
 Vf_cm3_per_cm <- 0.000000069 * 1000
@@ -185,20 +195,12 @@ kaw <- kaw.o * 100 * 60 * 60 * 24
 
 # ksed from Koelmans regression (Deff/r^2, d^-1)
 logksed <- -0.832 * log10(Kow.t) + 1.34
-ksed <- 10^(logksed)
+ksed <- 10^(logksed) * 1000 # add factor to get a closer value to the fit one
 
 # Kd via Abraham Koc
 logKoc <- 1.1 * E - 0.72 * S + 0.15 * A - 1.98 * B + 2.28 * V + 0.14
 Koc <- 10^(logKoc)
 Kd <- Koc * foc   # L/kg
-
-# quick check print
-cat("Congener summary: logKow=", log10(Kow),
-    "; Kow.t=", signif(Kow.t,6),
-    "; Kd=", signif(Kd,6),
-    "; kpw=", signif(kpw,6),
-    "; kaw=", signif(kaw,6),
-    "; ksed(Koelmans)=", signif(ksed,6), "\n")
 
 # -------------------------
 # 3) Fixed parameters (assembled)
@@ -222,7 +224,10 @@ parms_base <- list(
 # -------------------------
 # 4) Initial conditions & times
 # -------------------------
-Ct <- 145    # ng/g sediment measured
+# GS -> 03_NBH_SedimentPCB
+bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv")
+
+Ct <-     # ng/g sediment measured
 Cpw0 <- Ct * 1000 / Kd   # ng/L
 
 cinit <- c(Cs = Ct, Cpw = Cpw0, Cw = 0, Ca = 0, Cpuf = 0)

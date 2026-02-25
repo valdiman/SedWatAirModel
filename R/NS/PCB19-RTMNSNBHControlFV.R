@@ -25,7 +25,7 @@ install.packages("gridExtra")
 
 # Read data ---------------------------------------------------------------
 {
-  exp.data <- read.csv("Data/06_Dataset_final_PCBmass.csv")
+  exp.data <- read.csv("Data/01_NS_SPME_PUF.csv")
   # Select individual congener from datasets
   pcb.ind <- "PCB_19"
   # Extract relevant columns
