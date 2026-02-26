@@ -1,4 +1,5 @@
 # Fit sediment desorption rate (ksed) for PCB transport model.
+# NS = non-shaken
 
 # Packages and libraries --------------------------------------------------
 # Install packages
@@ -17,7 +18,7 @@ install.packages("tibble")
 # Non-shaken data
 exp.ns.data <- read.csv("Data/01_NS_SPME_PUF.csv")
 
-pcb.ind <- "PCB_19"
+pcb.ind <- "PCB_32"
 
 pcbi <- exp.ns.data[, c("ID", "Sample_medium", "Group",
                         "time", "Replicate", pcb.ind)]

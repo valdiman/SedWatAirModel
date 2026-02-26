@@ -1,4 +1,5 @@
 # Fit sediment desorption rate (ksed) for PCB transport model.
+# GS = Gentle shaking
 
 # Packages and libraries --------------------------------------------------
 # Install packages
@@ -24,13 +25,6 @@ pcb.ind <- "PCB_32"
 pcbi <- exp.gs.data[, c("Sample_medium", "percent_biochar",
                      "Group", "time", "Replicate", pcb.ind)]
 
-# SPME control samples (mf)
-pcbi.spme.control <- pcbi %>%
-  filter(Sample_medium == "SPME", Group == "Control",
-         percent_biochar == 0.0) %>%
-  rename(mf_control = !!sym(pcb.ind)) %>%
-  select(time, mf_control)
-
 # PUF control samples (mpuf)
 pcbi.puf.control <- pcbi %>%
   filter(Sample_medium == "PUF", Group == "Control",
@@ -39,18 +33,13 @@ pcbi.puf.control <- pcbi %>%
   select(time, mpuf_control)
 
 # Combine and add t = 0
-pcb_combined_control <- cbind(
-  pcbi.spme.control %>% select(time, mf_control),
-  pcbi.puf.control %>% select(mpuf_control)
-)
-
-pcb_combined_control <- rbind(
-  data.frame(time = 0, mf_control = 0, mpuf_control = 0),
-  pcb_combined_control
+pcbi_control <- rbind(
+  data.frame(time = 0, mpuf_control = 0),
+  pcbi.puf.control
 )
 
 # Observed PUF by time (mean across replicates)
-obs_df <- as_tibble(pcb_combined_control) %>%
+obs_df <- as_tibble(pcbi_control) %>%
   group_by(time) %>%
   summarise(mpuf_obs = mean(mpuf_control, na.rm = TRUE), .groups = "drop") %>%
   arrange(time) %>%
@@ -140,11 +129,7 @@ dUow <- pc_row$dUow
 Kaw <- pc_row$Kaw
 dUaw <- pc_row$dUaw
 Koa <- pc_row$Koa
-E <- pc_row$E
-S <- pc_row$S
-A <- pc_row$A
-B <- pc_row$B
-V <- pc_row$V
+E <- pc_row$E; S <- pc_row$S; A <- pc_row$A; B <- pc_row$B; V <- pc_row$V
 
 # physical constants & temps (usually do not change)
 MH2O <- 18.0152; MCO2 <- 44.0094
@@ -229,9 +214,9 @@ Ct <- mean(Ct[, 1])
 # - Total contaminant mass in the sediment layer (ng):
 M_sed_init <- Ct * parms_base$ms   # ng
 
-# - compute Cs (ng/g, sorbed on solids) that yields M_sed_init when equilibrium holds:
-#   M_sed_init = ms_g * Cs + Vpw_L * (Cs * 1000 / Kd)
-#   so Cs = M_sed_init / (ms_g + Vpw_L * 1000 / Kd)
+# compute Cs (ng/g, sorbed on solids) that yields M_sed_init when equilibrium holds:
+# M_sed_init = ms_g * Cs + Vpw_L * (Cs * 1000 / Kd)
+# so Cs = M_sed_init / (ms_g + Vpw_L * 1000 / Kd)
 Vpw_L <- 0.004
 ms_g <- parms_base$ms
 Cs_init <- M_sed_init / (ms_g + Vpw_L * 1000 / parms_base$Kd)
