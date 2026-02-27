@@ -145,12 +145,12 @@ Vf_tot <- Vf_cm3_total * L
 Kf <- 10^(1.06 * log10(Kow.t) - 1.16)
 
 # ksed from KsedFittingGS.R
-ksed <- 6.4748
+ksed <- 6.475
 
 # ---------- assemble parms ----------
 parms <- list(
   # rates that might be fit / changed (initial guesses kept)
-  ro = 420, ko = 3, kb = 0,
+  ro = 400, ko = 3, kb = 0,
   # fixed params & precomputed
   Kd = Kd, MW.pcb = MW.pcb,
   Vw = Vw_cm3, Vpw = Vpw_cm3, Va = Va_cm3, Aws = Aws, Aaw = Aaw,
@@ -181,7 +181,7 @@ Cpw_init <- Cs_init * 1000 / Kd                      # ng/L
 cinit <- c(Cs = Cs_init, Cpw = Cpw_init, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
 
 # ---- ODE uses parms only, minimal inline computation ----
-rtm.PCB32 <- function(t, state, parms) {
+rtm.PCB <- function(t, state, parms) {
   with(as.list(c(state, parms)), {
     # State (input units)
     # Cs: ng/g (state[1])
@@ -227,7 +227,7 @@ rtm.PCB32 <- function(t, state, parms) {
 
 # ---- run ----
 t.1 <- sort(unique(pcb_combined_control$time))
-out.1 <- ode(y = cinit, times = t.1, func = rtm.PCB32, parms = parms)
+out.1 <- ode(y = cinit, times = t.1, func = rtm.PCB, parms = parms)
 
 # ---- post-process masses (ng) ----
 df.1 <- as.data.frame(out.1)
@@ -298,7 +298,7 @@ print(df.1)
   # Run the model with the new time sequence
   cinit <- c(Cs = Cs_init, Cpw = Cpw_init, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
   t_daily <- seq(0, 130, by = 1)  # Adjust according to your needs
-  out_daily <- ode(y = cinit, times = t_daily, func = rtm.PCB32,
+  out_daily <- ode(y = cinit, times = t_daily, func = rtm.PCB,
                    parms = parms)
   head(out_daily)
   
