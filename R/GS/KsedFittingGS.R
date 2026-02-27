@@ -15,20 +15,19 @@ install.packages("tibble")
 }
 
 # -------------------------
-# Canonical geometry & volumes (single place)
-# Units: volumes in L for high-level variables
+# Volumes
 Vw_L   <- 0.100   # L (100 cm3)
 Vpw_L  <- 0.004   # L (4 cm3)
 Va_L   <- 0.125   # L (125 cm3)
 Vpuf_L <- 0.029   # L (29 cm3)
 
-# Areas and sampler geometry (kept canonical here)
+# Areas and sampler geometry
 Aaw  <- 20    # cm2 air-water area
 Aws  <- 30    # cm2 sediment-water area
 Apuf <- 7.07  # cm2 (PUF area, whichever unit you've used before)
 
 # -------------------------
-# 1) Read & prepare observed data (PCB_32, Control)
+# 1) Read & prepare observed data
 # -------------------------
 exp.gs.data <- read.csv("Data/02_GS_SPME_PUF.csv", stringsAsFactors = FALSE)
 
@@ -161,7 +160,6 @@ Kow.t <- Kow * exp(-dUow / R * (1 / Tw.1 - 1 / Tst.1))
 Kaw.t <- Kaw * exp(-dUaw / R * (1 / Tw.1 - 1 / Tst.1)) * Tw.1 / Tst.1
 
 # PUF & SPME parameters
-Apuf <- Apuf
 Vpuf_cm3 <- Vpuf_L * 1000
 d_puf <- 0.0213 * 100^3
 Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * d_puf
@@ -183,7 +181,7 @@ V.co2.w <- 4.1e-2
 SC.pcb.w <- v.H2O / D.pcb.water
 
 # kpw (porewater-water) [cm/day]
-bl <- 0.21
+bl <- 0.21 # it can be modified
 kpw <- D.pcb.water * 60 * 60 * 24 / bl
 
 # kaw (air-water) [cm/day]
@@ -192,7 +190,7 @@ Kaw.w <- V.co2.w * (SC.pcb.w / 600)^(-0.5)
 kaw.o <- (1 / (Kaw.a * Kaw.t) + (1 / Kaw.w))^-1
 kaw <- kaw.o * 100 * 60 * 60 * 24
 
-# ksed initial (Koelmans regression) — use as starting guess
+# ksed initial (Koelmans regression)
 logksed <- -0.832 * log10(Kow.t) + 1.34
 ksed_init <- 10^(logksed)
 
@@ -203,7 +201,7 @@ foc <- 0.03
 Kd <- Koc * foc   # L/kg
 
 # -------------------------
-# 4) Fixed parameters (assembled) - single canonical parms_base
+# 4) Fixed parameters
 # -------------------------
 # compute Vs in cm3 associated with ms (same formula you used earlier)
 n  <- 0.42
