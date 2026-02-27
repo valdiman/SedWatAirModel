@@ -6,3 +6,8 @@ dir.create("R/GS") # gentle shaked
 dir.create("Data")
 dir.create("Output")
 dir.create("Output/Data")
+dir.create("Output/Data/GS")
+dir.create("Output/Data/NS")
+dir.create("Output/Plot")
+dir.create("Output/Plot/GS")
+dir.create("Output/Plot/NS")

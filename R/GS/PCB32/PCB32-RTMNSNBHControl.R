@@ -48,25 +48,25 @@ install.packages("gridExtra")
            percent_biochar == 0.0) %>%
     rename(mpuf_control = !!sym(pcb.ind)) %>%
     select(time, mpuf_control)
-
-# Combine the mf and mpuf data for Control
-pcb_combined_control <- cbind(
-  pcbi.spme.control %>%
-    select(time, mf_control),
-  pcbi.puf.control %>%
-    select(mpuf_control)
-)
-# Add a row for time = 0
-pcb_combined_control <- rbind(
-  data.frame(time = 0, mf_control = 0, mpuf_control = 0),
-  pcb_combined_control
-)
+  
+  # Combine the mf and mpuf data for Control
+  pcb_combined_control <- cbind(
+    pcbi.spme.control %>%
+      select(time, mf_control),
+    pcbi.puf.control %>%
+      select(mpuf_control))
+  
+  # Add a row for time = 0
+  pcb_combined_control <- rbind(
+    data.frame(time = 0, mf_control = 0, mpuf_control = 0),
+    pcb_combined_control)
 }
+
+# Fixed phys-chem and geometry / precomputed
 
 pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
-# fixed phys-chem
 MW.pcb <- pc_row$MW
 Kow    <- pc_row$Kow
 dUow   <- pc_row$dUow
@@ -75,37 +75,44 @@ dUaw   <- pc_row$dUaw
 Koa    <- pc_row$Koa
 E <- pc_row$E; S <- pc_row$S; A <- pc_row$A; B <- pc_row$B; V <- pc_row$V
 
-# geometry / fixed values (put here so ODE doesn't recompute)
-Vw  <- 100    # cm3 water volume
-Vpw <- 4      # cm3 porewater volume
-Va  <- 125    # cm3 headspace
+# geometry / fixed values
+Vw_cm3   <- 100    # cm3 water volume
+Vpw_cm3  <- 4      # cm3 porewater volume
+Va_cm3   <- 125    # cm3 headspace
+Vpuf_cm3 <- 29     # cm3 PUF
 Aaw <- 20     # cm2 air-water area
 Aws <- 30     # cm2 sediment-water area
 ms_g <- 10    # g sediment in the experimental sediment layer
 
+# derived volumes in liters
+Vw_L   <- Vw_cm3   / 1000
+Vpw_L  <- Vpw_cm3  / 1000
+Va_L   <- Va_cm3   / 1000
+Vpuf_L <- Vpuf_cm3 / 1000
+
 # compute Vs (cm3 porewater associated with ms_g)
 n  <- 0.42
-ds <- 1540      # g / L
+ds <- 1540      # g / L (sediment dry density)
 M  <- ds * (1 - n) / n     # g solids per L porewater
+# Vs is cm3 porewater associated with ms_g
 Vs <- ms_g / M * 1000      # cm3 porewater associated with ms_g
 
-# compute Kd once
-# (if you use external E,S,A,B,V use those above; here example fixed values used)
-Eval <- 1.74; Sval <- 1.35; Aval <- 0; Bval <- 0.17; Vval <- 1.6914
-logKoc <- 1.1 * Eval - 0.72 * Sval + 0.15 * Aval - 1.98 * Bval + 2.28 * Vval + 0.14
+# compute Kd once (Koc model) and document units
+logKoc <- 1.1 * E - 0.72 * S + 0.15 * A - 1.98 * B + 2.28 * V + 0.14
 Koc <- 10^(logKoc)
 foc <- 0.03
 Kd  <- Koc * foc   # L/kg sediment
 
-# compute temperature-corrected and transfer coeffs once (if T fixed)
+# Temperature-corrected partitioning coefficients
 MH2O <- 18.0152; MCO2 <- 44.0094; R <- 8.3144
 Tst.1 <- 273.15 + 25; Tw.1 <- 273.15 + 20
 Kaw.t <- Kaw * exp(-dUaw / R * (1 / Tw.1 - 1 / Tst.1)) * Tw.1 / Tst.1
 Kow.t <- Kow * exp(-dUow / R * (1 / Tw.1 - 1 / Tst.1))
 
-# diffusion / transfer
+# diffusion / transfer (documented magic numbers)
 D.water.air <- 0.2743615
 D.co2.w <- 1.67606E-05
+# Adjust PCB diffusivities using molecular weight scaling
 D.pcb.air <- D.water.air * (MW.pcb/MH2O)^(-0.5)
 D.pcb.water <- D.co2.w * (MW.pcb/MCO2)^(-0.5)
 v.H2O <- 0.010072884
@@ -114,30 +121,39 @@ V.co2.w <- 4.1*10^-2
 SC.pcb.w <- v.H2O / D.pcb.water
 bl <- 0.21
 kpw <- D.pcb.water * 60 * 60 * 24 / bl   # cm/day
+
+# Kaw combined (air+water resistances) then converted to cm/day
 Kaw.a <- V.water.air * (D.pcb.air/D.water.air)^(0.67)
 Kaw.w <- V.co2.w * (SC.pcb.w/600)^(-0.5)
 kaw.o <- (1 / (Kaw.a * Kaw.t) + (1 / Kaw.w))^-1
 kaw.o <- kaw.o * 100 * 60 * 60 * 24   # cm/day
 
-# PUF & SPME derived (precompute)
-Apuf <- 7.07; Vpuf <- 29; d <- 0.0213 * 100^3
-Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * d
+# PUF & SPME derived
+Apuf <- 7.07
+Vpuf <- Vpuf_cm3
+dpuf <- 0.0213 * 100^3
+Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * dpuf
+
+# SPME fiber: Vf per cm and total for exposed length L
 Af <- 0.138
-Vf <- 0.000000069 * 1000
+Vf_cm3_per_cm <- 0.000000069 * 1000
+fiber_length_cm <- 1
+Vf_cm3_total <- Vf_cm3_per_cm * fiber_length_cm
+Vf_L <- Vf_cm3_total / 1000
 L  <- 1
-Vf_tot <- Vf * L
+Vf_tot <- Vf_cm3_total * L
 Kf <- 10^(1.06 * log10(Kow.t) - 1.16)
 
-# ksed (if fixed)
+# ksed from KsedFittingGS.R
 ksed <- 6.4748
 
 # ---------- assemble parms ----------
 parms <- list(
-  # rates that might be fit / changed
+  # rates that might be fit / changed (initial guesses kept)
   ro = 420, ko = 3, kb = 0,
   # fixed params & precomputed
   Kd = Kd, MW.pcb = MW.pcb,
-  Vw = Vw, Vpw = Vpw, Va = Va, Aws = Aws, Aaw = Aaw,
+  Vw = Vw_cm3, Vpw = Vpw_cm3, Va = Va_cm3, Aws = Aws, Aaw = Aaw,
   ms_g = ms_g, Vs = Vs,
   Kaw.t = Kaw.t, Kow.t = Kow.t,
   kpw = kpw, kaw.o = kaw.o,
@@ -150,14 +166,16 @@ parms <- list(
 bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv", stringsAsFactors = FALSE)
 Ct <- mean(bulk_conc[[pcb.ind]])   # ng/g sediment mean measured
 
-# Total mass (ng) in sediment layer (use ms_g not parms_base)
+# Total mass (ng) in sediment layer (use ms_g in g)
 M_sed_init <- Ct * ms_g     # ng (ms_g in g; Ct in ng/g)
-# Vpw in L for the formula below:
-Vpw_L <- Vpw / 1000  # 4 cm3 -> 0.004 L
 
-# Solve for Cs_init so that mass = Cs*ms_g + dissolved mass in porewater
-Cs_init <- M_sed_init / (ms_g + Vpw_L * 1000 / Kd)  # ng/g
-Cpw_init <- Cs_init * 1000 / Kd                     # ng/L
+# Solve for Cs_init so that M_sed_init = Cs*ms_g + dissolved mass in porewater
+# Derivation:
+#   Cpw (ng/L) = (Cs (ng/g) * 1000 g/kg) / Kd (L/kg) = Cs*1000 / Kd
+#   dissolved mass (ng) = Cpw * Vpw_L = (Cs*1000 / Kd) * Vpw_L
+#   M_total = Cs*ms_g + (Cs*1000 / Kd) * Vpw_L = Cs * (ms_g + (1000 * Vpw_L) / Kd)
+Cs_init <- M_sed_init / (ms_g + (1000 * Vpw_L) / Kd)  # ng/g
+Cpw_init <- Cs_init * 1000 / Kd                      # ng/L
 
 # include Cf initial (SPME) as 0 explicitly; order must match ODE: Cs, Cpw, Cw, Cf, Ca, Cpuf
 cinit <- c(Cs = Cs_init, Cpw = Cpw_init, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
@@ -165,42 +183,45 @@ cinit <- c(Cs = Cs_init, Cpw = Cpw_init, Cw = 0, Cf = 0, Ca = 0, Cpuf = 0)
 # ---- ODE uses parms only, minimal inline computation ----
 rtm.PCB32 <- function(t, state, parms) {
   with(as.list(c(state, parms)), {
-    # convert units
-    Cs   <- state[1]           # ng/g
-    Cpw  <- state[2] / 1000    # ng/cm3
-    Cw   <- state[3] / 1000
-    Cf   <- state[4] / 1000
-    Ca   <- state[5] / 1000
-    Cpuf <- state[6] / 1000
+    # State (input units)
+    # Cs: ng/g (state[1])
+    # Cpw, Cw, Cf, Ca, Cpuf: ng/L (state[2:6])
+    # Convert aqueous/gas to ng/cm3 for flux calc (1 L = 1000 cm3 -> divide by 1000)
+    Cs   <- state[1]                 # ng/g
+    Cpw_cm3  <- state[2] / 1000      # ng/cm3
+    Cw_cm3   <- state[3] / 1000
+    Cf_cm3   <- state[4] / 1000
+    Ca_cm3   <- state[5] / 1000
+    Cpuf_cm3 <- state[6] / 1000
     
-    # current Cs -> porewater-equivalent [ng/cm3]
-    Cs_pw_eq <- Cs / Kd
+    Cs_pw_eq <- Cs / Kd   # ng/cm3 (consistent with your earlier approach)
     
-    # ODEs
-    dCsdt  <- - ksed * Vs / ms_g * (Cs_pw_eq - Cpw)
+    dCsdt  <- - ksed * Vs / ms_g * (Cs_pw_eq - Cpw_cm3)
     
-    dCpwdt <-   ksed * Vs / Vpw * (Cs_pw_eq - Cpw) -
-      kpw * Aws / Vpw * (Cpw - Cw) -
-      kb * Cpw
+    dCpwdt <-   ksed * Vs / Vpw * (Cs_pw_eq - Cpw_cm3) -
+      kpw * Aws / Vpw * (Cpw_cm3 - Cw_cm3) -
+      kb * Cpw_cm3
     
-    dCwdt <- kpw * Aws / Vw * (Cpw - Cw) -
-      kaw.o * Aaw / Vw * (Cw - Ca / Kaw.t) -
-      ko * Af * L / Vw * (Cw - Cf / Kf)
+    dCwdt <- kpw * Aws / Vw * (Cpw_cm3 - Cw_cm3) -
+      kaw.o * Aaw / Vw * (Cw_cm3 - Ca_cm3 / Kaw.t) -
+      ko * Af * L / Vw * (Cw_cm3 - Cf_cm3 / Kf)
     
-    dCfdt <- ko * Af / Vf_tot * (Cw - Cf / Kf)
+    dCfdt <- ko * Af / Vf_tot * (Cw_cm3 - Cf_cm3 / Kf)
     
-    dCadt <- kaw.o * Aaw / Va * (Cw - Ca / Kaw.t) -
-      ro * Apuf / Va * (Ca - Cpuf / Kpuf)
+    dCadt <- kaw.o * Aaw / Va * (Cw_cm3 - Ca_cm3 / Kaw.t) -
+      ro * Apuf / Va * (Ca_cm3 - Cpuf_cm3 / Kpuf)
     
-    dCpufdt <- ro * Apuf / Vpuf * (Ca - Cpuf / Kpuf)
+    dCpufdt <- ro * Apuf / Vpuf * (Ca_cm3 - Cpuf_cm3 / Kpuf)
     
-    # return in same units as state (note conversions)
-    return(list(c(dCsdt,
-                  dCpwdt * 1000,
-                  dCwdt * 1000,
-                  dCfdt * 1000,
-                  dCadt * 1000,
-                  dCpufdt * 1000)))
+    # return derivatives in same units as state
+    return(list(c(
+      dCsdt,
+      dCpwdt * 1000,
+      dCwdt * 1000,
+      dCfdt * 1000,
+      dCadt * 1000,
+      dCpufdt * 1000
+    )))
   })
 }
 
@@ -212,20 +233,8 @@ out.1 <- ode(y = cinit, times = t.1, func = rtm.PCB32, parms = parms)
 df.1 <- as.data.frame(out.1)
 colnames(df.1) <- c("time","Cs","Cpw","Cw","Cf","Ca","Cpuf")
 
-Vw_cm3  <- 100
-Va_cm3  <- 125
-Vpuf_cm3 <- 29
-Vw_L   <- Vw_cm3  / 1000
-Va_L   <- Va_cm3  / 1000
-Vpuf_L <- Vpuf_cm3 / 1000
-
-# SPME: you supplied Vf as cm3 per cm of fiber
-Vf_cm3_per_cm <- 0.000000069 * 1000  # cm3 per cm (keep your original source)
-fiber_length_cm <- 1                  # exposed fiber length in cm (you used L=1)
-Vf_cm3_total <- Vf_cm3_per_cm * fiber_length_cm
-Vf_L <- Vf_cm3_total / 1000           # L
-
-# ---- compute compartment masses (ng) ----
+# convert L volumes (we already have Vw_L etc.)
+# compute compartment masses (ng)
 # Cs is ng/g, multiply by sediment mass (g) -> ng
 df.1$ms   <- df.1$Cs * ms_g
 
@@ -239,6 +248,8 @@ df.1$mpuf <- df.1$Cpuf * Vpuf_L    # PUF mass (ng)
 # ---- total mass & fractions (guard against zero total) ----
 df.1$mt <- df.1$ms + df.1$mpw + df.1$mw + df.1$mf + df.1$ma + df.1$mpuf
 
+print(df.1)
+{
   # Ensure observed data is in a tibble
   observed_data <- as_tibble(pcb_combined_control) %>%
     select(time, mf_control, mpuf_control)
@@ -305,7 +316,7 @@ df.1$mt <- df.1$ms + df.1$mpw + df.1$mw + df.1$mf + df.1$ma + df.1$mpuf
     select(time, mf, mpuf)
   
   # Export data
-  #write.csv(model_results_daily_clean, file = "Output/Data/RTM/PCB32Control.csv")
+  #write.csv(model_results_daily_clean, file = "Output/Data/GS/PCB32ControlNBH.csv")
   
   # Prepare model data for plotting
   model_data_long <- model_results_daily_clean %>%
@@ -355,12 +366,12 @@ df.1$mt <- df.1$ms + df.1$mpw + df.1$mw + df.1$mf + df.1$ma + df.1$mpuf
     theme_bw() +
     theme(legend.title = element_blank())
   
-#}
+}
 
 # Arrange plots side by side
 p.32 <- grid.arrange(p_mf, p_mpuf, ncol = 2)
 
 # Save plot in folder
-ggsave("Output/Plots/RTM/PCB32Control.png", plot = p.32, width = 6,
+ggsave("Output/Plot/GS/PCB32ControlNBH.png", plot = p.32, width = 6,
        height = 5, dpi = 500)
 
