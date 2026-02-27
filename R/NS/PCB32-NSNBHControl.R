@@ -370,6 +370,6 @@ print(df.1)
 plot <- grid.arrange(p_mf, p_mpuf, ncol = 2)
 
 # Save plot in folder
-ggsave("Output/Plot/NS/PCB32ControlNBH.png", plot = plot, width = 6,
+ggsave("Output/Plot/NS/PCB32NSNBH.png", plot = plot, width = 6,
        height = 5, dpi = 500)
 
