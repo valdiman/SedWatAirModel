@@ -27,9 +27,10 @@ Aws  <- 30    # cm2 sediment-water area
 Apuf <- 7.07  # cm2 (PUF area, whichever unit you've used before)
 
 # Non-shaken data
-exp.ns.data <- read.csv("Data/01_NS_SPME_PUF.csv")
+exp.ns.data <- read.csv("Data/01_NS_SPME_PUF.csv", stringsAsFactors = FALSE,
+                        check.names = FALSE)
 
-pcb.ind <- "PCB_32"
+pcb.ind <- "PCB_18+30"
 
 pcbi <- exp.ns.data[, c("ID", "Sample_medium", "Group",
                         "time", "Replicate", pcb.ind)]
@@ -235,7 +236,9 @@ parms_base <- list(
 # -------------------------
 # 5) Initial conditions & times (mass-consistent)
 # -------------------------
-bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv", stringsAsFactors = FALSE)
+bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv",
+                      stringsAsFactors = FALSE,
+                      check.names = FALSE)
 Ct <- mean(bulk_conc[[pcb.ind]])   # ng/g
 
 # Total mass in sediment layer (ng)

@@ -29,9 +29,10 @@ Apuf <- 7.07  # cm2 (PUF area, whichever unit you've used before)
 # -------------------------
 # 1) Read & prepare observed data
 # -------------------------
-exp.gs.data <- read.csv("Data/02_GS_SPME_PUF.csv", stringsAsFactors = FALSE)
+exp.gs.data <- read.csv("Data/02_GS_SPME_PUF.csv", stringsAsFactors = FALSE,
+                        check.names = FALSE)
 
-pcb.ind <- "PCB_8"
+pcb.ind <- "PCB_18+30"
 
 pcbi <- exp.gs.data[, c("Sample_medium", "percent_biochar",
                         "Group", "time", "Replicate", pcb.ind)]
@@ -236,7 +237,8 @@ parms_base <- list(
 # -------------------------
 # 5) Initial conditions & times (mass-consistent)
 # -------------------------
-bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv", stringsAsFactors = FALSE)
+bulk_conc <- read.csv("Data/03_NBH_SedimentPCB.csv", stringsAsFactors = FALSE,
+                      check.names = FALSE)
 Ct <- mean(bulk_conc[[pcb.ind]])   # ng/g
 
 # Total mass in sediment layer (ng)
