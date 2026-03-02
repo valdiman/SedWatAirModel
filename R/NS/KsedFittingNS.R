@@ -17,7 +17,6 @@ install.packages("tibble")
 # -------------------------
 # Volumes
 Vw_L   <- 0.100   # L (100 cm3)
-Vpw_L  <- 0.004   # L (4 cm3)
 Va_L   <- 0.125   # L (125 cm3)
 Vpuf_L <- 0.029   # L (29 cm3)
 
@@ -60,81 +59,89 @@ obs_df <- as_tibble(pcbi_control_0) %>%
 #    states: Cs (ng/g), Cpw (ng/L), Cw (ng/L), Ca (ng/L), Cpuf (ng/L)
 # -------------------------
 rtm_simple <- function(t, state, parms) {
-  with(as.list(c(state, parms)), {
-    # Convert volumes to cm3 for area/volume ratios inside the ODE
-    Vpw_cm3 <- Vpw_L * 1000
-    Vw_cm3  <- Vw_L  * 1000
-    Va_cm3  <- Va_L  * 1000
-    Vpuf_cm3<- Vpuf_L * 1000
-    
-    # Areas from parms
-    Aaw <- parms$Aaw
-    Aws <- parms$Aws
-    Apuf <- parms$Apuf
-    
-    # Sediment mass & Vs (cm3) from parms
-    ms_g <- parms$ms
-    Vs_cm3 <- parms$Vs_cm3
-    
-    # States (units: Cs ng/g; others ng/L)
-    Cs   <- state["Cs"]     # ng/g
-    Cpw  <- state["Cpw"]    # ng/L
-    Cw   <- state["Cw"]     # ng/L
-    Ca   <- state["Ca"]     # ng/L
-    Cpuf <- state["Cpuf"]   # ng/L
-    
-    # Convert aqueous/gas concentrations to ng/cm3 for flux computations (1 L = 1000 cm3)
-    Cpw_cm3  <- Cpw  / 1000
-    Cw_cm3   <- Cw   / 1000
-    Ca_cm3   <- Ca   / 1000
-    Cpuf_cm3 <- Cpuf / 1000
-    
-    # Convert Cs (ng/g) to porewater-equivalent in ng/cm3 using Kd (units: L/kg)
-    # Derivation: Cpw (ng/L) = Cs (ng/g) * 1000 / Kd  --> ng/L
-    # So ng/cm3 -> divide by 1000 -> Cs / Kd (ng/cm3)
-    Cs_pw_eq_cm3 <- Cs / parms$Kd  # ng/cm3
-    
-    # Parameters
-    ksed <- parms$ksed    # 1/day
-    kpw  <- parms$kpw     # cm/day
-    kaw  <- parms$kaw     # cm/day
-    kb   <- parms$kb      # 1/day
-    ro   <- parms$ro      # 1/day
-    Kpuf <- parms$Kpuf
-    Kaw.t<- parms$Kaw.t
-    Af   <- parms$Af
-    Vf_tot <- parms$Vf_tot
-    
-    # ---- ODEs (all flux terms use ng/cm3 & cm3 volumes) ----
-    # dCs/dt (ng/g/day)
-    dCsdt <- - ksed * Vs_cm3 / ms_g * (Cs_pw_eq_cm3 - Cpw_cm3)
-    
-    # dCpw/dt (ng/cm3/day) then converted back to ng/L when returning
-    dCpwdt <-  ksed * Vs_cm3 / Vpw_cm3 * (Cs_pw_eq_cm3 - Cpw_cm3) -
-      kpw * Aws / Vpw_cm3 * (Cpw_cm3 - Cw_cm3) -
-      kb * Cpw_cm3
-    
-    # dCw/dt (ng/cm3/day)
-    dCwdt <- kpw * Aws / Vw_cm3 * (Cpw_cm3 - Cw_cm3) -
-      kaw * Aaw / Vw_cm3 * (Cw_cm3 - Ca_cm3 / Kaw.t)
-    
-    # dCa/dt (ng/cm3/day)
-    dCadt <- kaw * Aaw / Va_cm3 * (Cw_cm3 - Ca_cm3 / Kaw.t) -
-      ro * Apuf / Va_cm3 * (Ca_cm3 - Cpuf_cm3 / Kpuf)
-    
-    # dCpuf/dt (ng/cm3/day)
-    dCpufdt <- ro * Apuf / Vpuf_cm3 * (Ca_cm3 - Cpuf_cm3 / Kpuf)
-    
-    # return derivatives in same units as state vector:
-    # Cs (ng/g/day) returned as-is; aqueous/gas (ng/cm3/day) -> ng/L/day multiply *1000
-    return(list(c(
-      dCsdt,
-      dCpwdt * 1000,
-      dCwdt * 1000,
-      dCadt * 1000,
-      dCpufdt * 1000
-    )))
-  })
+  # ensure state is numeric vector of length 5
+  if (length(state) < 5) stop("rtm_simple: state vector must have length 5 (Cs, Cpw, Cw, Ca, Cpuf).")
+  # extract states by index to avoid name-mismatch problems
+  Cs   <- as.numeric(state[1])   # ng/g
+  Cpw  <- as.numeric(state[2])   # ng/L
+  Cw   <- as.numeric(state[3])   # ng/L
+  Ca   <- as.numeric(state[4])   # ng/L
+  Cpuf <- as.numeric(state[5])   # ng/L
+  
+  # quick checks that parms contain required entries
+  required_parms <- c("Vpw_cm3","Vw_L","Va_L","Vpuf_L","Aaw","Aws","Apuf",
+                      "Kd","ms","ksed","kpw","kaw","kb","ro","Kpuf","Kaw.t",
+                      "Af","Vf_tot")
+  missing_p <- setdiff(required_parms, names(parms))
+  if (length(missing_p) > 0) {
+    stop("rtm_simple: missing parms: ", paste(missing_p, collapse = ", "))
+  }
+  
+  # volumes / conversions
+  Vpw_cm3  <- as.numeric(parms$Vpw_cm3)
+  Vw_cm3   <- as.numeric(parms$Vw_L)  * 1000
+  Va_cm3   <- as.numeric(parms$Va_L)  * 1000
+  Vpuf_cm3 <- as.numeric(parms$Vpuf_L) * 1000
+  
+  # convert to ng/cm3 for flux calcs
+  Cpw_cm3  <- Cpw  / 1000
+  Cw_cm3   <- Cw   / 1000
+  Ca_cm3   <- Ca   / 1000
+  Cpuf_cm3 <- Cpuf / 1000
+  
+  # convert Cs (ng/g) to porewater-equivalent in ng/cm3 using Kd (L/kg)
+  # Cs_pw_eq_cm3 = Cs / Kd   (ng/cm3)
+  Cs_pw_eq_cm3 <- Cs / parms$Kd
+  
+  # parameters
+  ksed <- as.numeric(parms$ksed)  # 1/day
+  kpw  <- as.numeric(parms$kpw)   # cm/day
+  kaw  <- as.numeric(parms$kaw)   # cm/day
+  kb   <- as.numeric(parms$kb)    # 1/day
+  ro   <- as.numeric(parms$ro)    # 1/day
+  Kpuf <- as.numeric(parms$Kpuf)
+  Kaw.t<- as.numeric(parms$Kaw.t)
+  Af   <- as.numeric(parms$Af)
+  Vf_tot <- as.numeric(parms$Vf_tot)
+  Apuf <- as.numeric(parms$Apuf)
+  Aws  <- as.numeric(parms$Aws)
+  Aaw  <- as.numeric(parms$Aaw)
+  ms_g <- as.numeric(parms$ms)
+  
+  # ---- ODEs (use ng/cm3 and cm3 volumes) ----
+  # dCs/dt (ng/g/day)  (note: Vpw_cm3 used to convert to same basis)
+  dCsdt <- - ksed * Vpw_cm3 / ms_g * (Cs_pw_eq_cm3 - Cpw_cm3)
+  
+  # dCpw/dt (ng/cm3/day)  (exchange with sediment porewater and water)
+  dCpwdt <-  ksed * (Cs_pw_eq_cm3 - Cpw_cm3) -    # simplified as discussed (Vpw_cm3 cancels)
+    kpw * Aws / Vpw_cm3 * (Cpw_cm3 - Cw_cm3) -
+    kb * Cpw_cm3
+  
+  # dCw/dt (ng/cm3/day)
+  dCwdt <- kpw * Aws / Vw_cm3 * (Cpw_cm3 - Cw_cm3) -
+    kaw * Aaw / Vw_cm3 * (Cw_cm3 - Ca_cm3 / Kaw.t)
+  
+  # dCa/dt (ng/cm3/day)
+  dCadt <- kaw * Aaw / Va_cm3 * (Cw_cm3 - Ca_cm3 / Kaw.t) -
+    ro * Apuf / Va_cm3 * (Ca_cm3 - Cpuf_cm3 / Kpuf)
+  
+  # dCpuf/dt (ng/cm3/day)
+  dCpufdt <- ro * Apuf / Vpuf_cm3 * (Ca_cm3 - Cpuf_cm3 / Kpuf)
+  
+  # convert aqueous derivatives back to ng/L/day (multiply by 1000)
+  out <- c(
+    as.numeric(dCsdt),
+    as.numeric(dCpwdt * 1000),
+    as.numeric(dCwdt  * 1000),
+    as.numeric(dCadt  * 1000),
+    as.numeric(dCpufdt * 1000)
+  )
+  
+  # final guard: ensure length is 5 and numeric
+  if (length(out) != 5) stop("rtm_simple: derivative vector length != 5")
+  if (!is.numeric(out)) stop("rtm_simple: derivatives not numeric")
+  
+  return(list(out))
 }
 
 # -------------------------
@@ -208,7 +215,8 @@ n  <- 0.42
 ds <- 1540      # g / L
 ms_g <- 10      # g sediment in vial
 M  <- ds * (1 - n) / n
-Vs_cm3 <- ms_g / M * 1000
+Vpw_cm3 <- ms_g / M * 1000
+Vpw_L <- Vpw_cm3 / 1000
 
 parms_base <- list(
   ms   = ms_g,           # g sediment in vial
@@ -226,7 +234,7 @@ parms_base <- list(
   Apuf = Apuf,
   Aaw  = Aaw,
   Aws  = Aws,
-  Vs_cm3 = Vs_cm3,
+  Vpw_cm3 = Vpw_cm3,
   Vw_L = Vw_L,
   Vpw_L = Vpw_L,
   Va_L = Va_L,

@@ -60,7 +60,7 @@ install.packages("gridExtra")
 
 # Fixed phys-chem and geometry / precomputed
 
-pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
+pc <- read.csv("Data/05_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
 MW.pcb <- pc_row$MW
@@ -73,7 +73,6 @@ E <- pc_row$E; S <- pc_row$S; A <- pc_row$A; B <- pc_row$B; V <- pc_row$V
 
 # geometry / fixed values
 Vw_cm3   <- 100    # cm3 water volume
-Vpw_cm3  <- 4      # cm3 porewater volume
 Va_cm3   <- 125    # cm3 headspace
 Vpuf_cm3 <- 29     # cm3 PUF
 Aaw <- 20     # cm2 air-water area
@@ -82,16 +81,15 @@ ms_g <- 10    # g sediment in the experimental sediment layer
 
 # derived volumes in liters
 Vw_L   <- Vw_cm3   / 1000
-Vpw_L  <- Vpw_cm3  / 1000
 Va_L   <- Va_cm3   / 1000
 Vpuf_L <- Vpuf_cm3 / 1000
 
-# compute Vs (cm3 porewater associated with ms_g)
+# compute Vpw_cm3 (cm3 porewater associated with ms_g)
 n  <- 0.42
 ds <- 1540      # g / L (sediment dry density)
 M  <- ds * (1 - n) / n     # g solids per L porewater
-# Vs is cm3 porewater associated with ms_g
-Vs <- ms_g / M * 1000      # cm3 porewater associated with ms_g
+Vpw_cm3 <- ms_g / M * 1000      # cm3 porewater associated with ms_g
+Vpw_L  <- Vpw_cm3  / 1000
 
 # compute Kd once (Koc model) and document units
 logKoc <- 1.1 * E - 0.72 * S + 0.15 * A - 1.98 * B + 2.28 * V + 0.14
@@ -131,7 +129,7 @@ dpuf <- 0.0213 * 100^3
 Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * dpuf
 
 # SPME fiber: Vf per cm and total for exposed length L
-Af <- 0.138
+Af <- 0.07226 # cm2/cm
 Vf_cm3_per_cm <- 0.000000069 * 1000
 fiber_length_cm <- 1
 Vf_cm3_total <- Vf_cm3_per_cm * fiber_length_cm
@@ -150,7 +148,7 @@ parms <- list(
   # fixed params & precomputed
   Kd = Kd, MW.pcb = MW.pcb,
   Vw = Vw_cm3, Vpw = Vpw_cm3, Va = Va_cm3, Aws = Aws, Aaw = Aaw,
-  ms_g = ms_g, Vs = Vs,
+  ms_g = ms_g,
   Kaw.t = Kaw.t, Kow.t = Kow.t,
   kpw = kpw, kaw.o = kaw.o,
   Apuf = Apuf, Vpuf = Vpuf, Kpuf = Kpuf,
@@ -192,9 +190,9 @@ rtm.PCB <- function(t, state, parms) {
     
     Cs_pw_eq <- Cs / Kd   # ng/cm3 (consistent with your earlier approach)
     
-    dCsdt  <- - ksed * Vs / ms_g * (Cs_pw_eq - Cpw_cm3)
+    dCsdt  <- - ksed * Vpw / ms_g * (Cs_pw_eq - Cpw_cm3)
     
-    dCpwdt <-   ksed * Vs / Vpw * (Cs_pw_eq - Cpw_cm3) -
+    dCpwdt <-   ksed * Vpw / Vpw * (Cs_pw_eq - Cpw_cm3) -
       kpw * Aws / Vpw * (Cpw_cm3 - Cw_cm3) -
       kb * Cpw_cm3
     

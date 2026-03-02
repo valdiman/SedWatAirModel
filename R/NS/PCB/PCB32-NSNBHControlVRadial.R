@@ -51,7 +51,7 @@ pcb_combined_control <- rbind(
 )
 
 # Fixed phys-chem and geometry / precomputed ------------------------------
-pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
+pc <- read.csv("Data/05_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
 MW.pcb <- pc_row$MW
@@ -64,7 +64,6 @@ E <- pc_row$E; S <- pc_row$S; A <- pc_row$A; B <- pc_row$B; V <- pc_row$V
 
 # geometry / fixed values
 Vw_cm3   <- 100    # cm3 water volume
-Vpw_cm3  <- 4      # cm3 porewater volume
 Va_cm3   <- 125    # cm3 headspace
 Vpuf_cm3 <- 29     # cm3 PUF
 Aaw <- 20     # cm2 air-water area
@@ -73,15 +72,15 @@ ms_g <- 10    # g sediment in the experimental sediment layer
 
 # derived volumes in liters
 Vw_L   <- Vw_cm3   / 1000
-Vpw_L  <- Vpw_cm3  / 1000
 Va_L   <- Va_cm3   / 1000
 Vpuf_L <- Vpuf_cm3 / 1000
 
-# compute Vs (cm3 porewater associated with ms_g)
+# compute Vpw_cm3 (cm3 porewater associated with ms_g)
 n  <- 0.42
 ds <- 1540      # g / L (sediment dry density)
 M  <- ds * (1 - n) / n     # g solids per L porewater
-Vs <- ms_g / M * 1000      # cm3 porewater associated with ms_g
+Vpw_cm3 <- ms_g / M * 1000      # cm3 porewater associated with ms_g
+Vpw_L  <- Vpw_cm3  / 1000
 
 # compute Kd once (Koc model) and document units
 logKoc <- 1.1 * E - 0.72 * S + 0.15 * A - 1.98 * B + 2.28 * V + 0.14
@@ -119,7 +118,7 @@ Vpuf <- Vpuf_cm3
 dpuf <- 0.0213 * 100^3
 Kpuf <- 10^(0.6366 * log10(Koa) - 3.1774) * dpuf
 
-Af <- 0.138
+Af <- 0.07226 # cm2/cm
 Vf_cm3_per_cm <- 0.000000069 * 1000
 fiber_length_cm <- 1
 Vf_cm3_total <- Vf_cm3_per_cm * fiber_length_cm
@@ -149,19 +148,19 @@ desorption_single <- function(t_days, D_r2, mtot_ng, Nterms = 200) {
 # ---------- assemble parms ----------
 parms <- list(
   # fitted/used rates (set directly)
-  ro = 33.2319,        # fitted ro (cm/day)
-  ko = 3/50, kb = 0,
+  ro = 37.256,        # fitted ro (cm/day)
+  ko = 0.8, kb = 0,
   # fixed params & precomputed
   Kd = Kd, MW.pcb = MW.pcb,
   Vw = Vw_cm3, Vpw = Vpw_cm3, Va = Va_cm3, Aws = Aws, Aaw = Aaw,
-  ms_g = ms_g, Vs = Vs,
+  ms_g = ms_g,
   Kaw.t = Kaw.t, Kow.t = Kow.t,
   kpw = kpw, kaw.o = kaw.o,
   Apuf = Apuf, Vpuf = Vpuf, Kpuf = Kpuf,
   Af = Af, Vf_tot = Vf_tot, Kf = Kf,
   L = L,
   # desorption-specific defaults (use fitted D_r2)
-  D_r2 = 8.04777e-06,   # fitted D/r^2 (day^-1)
+  D_r2 = 7.17541e-06,   # fitted D/r^2 (day^-1)
   M_sed_init = NA,      # will set below from Cs_init * ms_g
   Nterms_des = 200
 )
@@ -197,7 +196,8 @@ rtm.PCB <- function(t, state, parms) {
     
     # ---- use desorption_single to supply dm_dt from sediment ----
     # desorption_single returns dm_dt in ng/day (mass released from solids)
-    des <- desorption_single(t_days = t, D_r2 = parms$D_r2, mtot_ng = parms$M_sed_init, Nterms = parms$Nterms_des)
+    des <- desorption_single(t_days = t, D_r2 = parms$D_r2, mtot_ng = parms$M_sed_init,
+                             Nterms = parms$Nterms_des)
     dm_dt_ng_per_day <- des$dm_dt[1]
     
     # dCs/dt now directly from dm_dt (ng/g/day)
