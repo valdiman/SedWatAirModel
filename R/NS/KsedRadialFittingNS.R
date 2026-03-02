@@ -163,7 +163,7 @@ rtm_simple <- function(t, state, parms) {
 
 # -------------------------
 # 3) Congener-specific chemistry & transport precompute
-pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
+pc <- read.csv("Data/05_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
 MW.pcb <- pc_row$MW
