@@ -64,7 +64,7 @@ install.packages("gridExtra")
 
 # Fixed phys-chem and geometry / precomputed
 
-pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
+pc <- read.csv("Data/05_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
 MW.pcb <- pc_row$MW

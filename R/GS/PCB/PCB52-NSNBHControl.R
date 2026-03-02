@@ -64,7 +64,7 @@ install.packages("gridExtra")
 
 # Fixed phys-chem and geometry / precomputed
 
-pc <- read.csv("Data/04_PCP.csv", stringsAsFactors = FALSE)
+pc <- read.csv("Data/05_PCP.csv", stringsAsFactors = FALSE)
 pc_row <- pc[pc$congener == pcb.ind, ]
 
 MW.pcb <- pc_row$MW
@@ -150,7 +150,7 @@ ksed <- 1.783
 # ---------- assemble parms ----------
 parms <- list(
   # rates that might be fit / changed (initial guesses kept)
-  ro = 400, ko = 3, kb = 0,
+  ro = 350, ko = 3, kb = 0,
   # fixed params & precomputed
   Kd = Kd, MW.pcb = MW.pcb,
   Vw = Vw_cm3, Vpw = Vpw_cm3, Va = Va_cm3, Aws = Aws, Aaw = Aaw,
