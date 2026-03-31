@@ -204,7 +204,7 @@ ksed_init <- 10^(logksed)
 # Kd via Abraham Koc
 logKoc <- 1.1 * E - 0.72 * S + 0.15 * A - 1.98 * B + 2.28 * V + 0.14
 Koc <- 10^(logKoc)
-foc <- 0.03
+foc <- 0.064
 Kd <- Koc * foc   # L/kg
 
 # -------------------------
